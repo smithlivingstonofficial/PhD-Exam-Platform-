@@ -78,9 +78,13 @@ This skill contains the technical principles, architectural constraints, and imp
 
 ---
 
-## 4. Supabase Database & Security Conventions
+## 4. Database & Prisma Conventions (Always Use Prisma)
 
-1. **Row Level Security (RLS)**:
+1. **Always Use Prisma For Schema Syncing**:
+   - ALWAYS use `prisma/schema.prisma` and `npx prisma db push` to push schema updates to Supabase.
+   - NEVER use or require manual raw SQL execution in the Supabase console.
+   - Use the singleton Prisma Client (`import { prisma } from "@/lib/prisma"`) for server queries and mutations.
+2. **Row Level Security (RLS) & Answer Cloaking**:
    - Enable RLS on ALL tables: `exams`, `questions`, `exam_sessions`, `session_answers`, `exam_audit_logs`.
    - Create separate views or specific column selects so students never receive `correct_answers`.
 2. **Atomic Answer Syncing**:
