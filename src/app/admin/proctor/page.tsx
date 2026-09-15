@@ -1,24 +1,50 @@
 "use client";
 
-import { useState } from "react";
-import { INITIAL_MOCK_CANDIDATES } from "@/lib/mock-data";
+import { useState, useEffect } from "react";
+import { 
+  getAdminOverviewData, 
+  issueWarningAction, 
+  terminateSessionAction, 
+  SerializedCandidate 
+} from "@/app/admin/actions";
 import { LiveProctorMonitor } from "@/features/examiner-dashboard";
-import { Filter, AlertTriangle } from "lucide-react";
+import { Filter, AlertTriangle, RefreshCw } from "lucide-react";
 
 export default function LiveProctorPage() {
-  const [candidates, setCandidates] = useState(INITIAL_MOCK_CANDIDATES);
+  const [candidates, setCandidates] = useState<SerializedCandidate[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [filterRisk, setFilterRisk] = useState<"ALL" | "FLAGGED" | "CLEAN">("ALL");
 
-  const handleIssueWarning = (id: string) => {
-    setCandidates((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, violation_count: c.violation_count + 1, integrity_score: Math.max(0, c.integrity_score - 10) } : c))
-    );
+  useEffect(() => {
+    let ignore = false;
+    async function init() {
+      const data = await getAdminOverviewData();
+      if (!ignore) {
+        setCandidates(data.candidates);
+        setIsLoading(false);
+      }
+    }
+    init();
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  const handleRefresh = async () => {
+    setIsLoading(true);
+    const data = await getAdminOverviewData();
+    setCandidates(data.candidates);
+    setIsLoading(false);
   };
 
-  const handleDisqualify = (id: string) => {
-    setCandidates((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, status: "DISQUALIFIED", integrity_score: 0 } : c))
-    );
+  const handleIssueWarning = async (sessionId: string) => {
+    await issueWarningAction(sessionId);
+    await handleRefresh();
+  };
+
+  const handleDisqualify = async (sessionId: string) => {
+    await terminateSessionAction(sessionId);
+    await handleRefresh();
   };
 
   const filteredCandidates = candidates.filter((c) => {
@@ -36,18 +62,25 @@ export default function LiveProctorPage() {
         <div>
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            <h1 className="text-xl font-bold text-white">Live Proctoring Command Center</h1>
+            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Live Proctoring Command Center</h1>
           </div>
-          <p className="text-xs text-neutral-400">
-            Monitor real-time candidate behavior, head pose telemetry, and audio environment violations
+          <p className="text-xs text-slate-500">
+            Monitor real-time candidate behavior, head pose telemetry, and audio environment violations from Supabase
           </p>
         </div>
 
-        {/* Status Pill */}
+        {/* Status Pill & Refresh */}
         <div className="flex items-center gap-3">
+          <button
+            onClick={handleRefresh}
+            className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs transition-colors shadow-2xs"
+            title="Refresh candidate sessions"
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin text-indigo-600" : ""}`} />
+          </button>
           {highRiskCount > 0 && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-950/40 border border-rose-500/30 text-rose-300 text-xs font-medium">
-              <AlertTriangle className="w-3.5 h-3.5" />
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold shadow-2xs">
+              <AlertTriangle className="w-4 h-4 text-rose-600" />
               <span>{highRiskCount} Candidates Require Attention</span>
             </div>
           )}
@@ -55,18 +88,18 @@ export default function LiveProctorPage() {
       </div>
 
       {/* Filter and Control Bar */}
-      <div className="p-3.5 rounded-xl bg-neutral-900/60 border border-neutral-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Filter className="w-3.5 h-3.5 text-neutral-400" />
-          <span className="text-xs text-neutral-400 font-medium">Filter by Risk:</span>
+          <Filter className="w-3.5 h-3.5 text-slate-400" />
+          <span className="text-xs text-slate-600 font-medium">Filter by Risk:</span>
           {(["ALL", "FLAGGED", "CLEAN"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setFilterRisk(tab)}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
                 filterRisk === tab
-                  ? "bg-neutral-800 text-white border border-neutral-700"
-                  : "text-neutral-400 hover:text-white"
+                  ? "bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-2xs"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
               }`}
             >
               {tab.charAt(0) + tab.slice(1).toLowerCase()}
@@ -74,17 +107,23 @@ export default function LiveProctorPage() {
           ))}
         </div>
 
-        <div className="text-xs text-neutral-400 font-mono">
-          Showing {filteredCandidates.length} of {candidates.length} active scholars
+        <div className="text-xs text-slate-500 font-mono font-medium">
+          Showing {filteredCandidates.length} of {candidates.length} active scholars in Supabase
         </div>
       </div>
 
       {/* Grid */}
-      <LiveProctorMonitor
-        candidates={filteredCandidates}
-        onIssueWarning={handleIssueWarning}
-        onDisqualify={handleDisqualify}
-      />
+      {isLoading ? (
+        <div className="p-12 text-center border border-slate-200 rounded-2xl bg-white text-xs text-slate-400">
+          Loading active candidate sessions from Supabase PostgreSQL...
+        </div>
+      ) : (
+        <LiveProctorMonitor
+          candidates={filteredCandidates}
+          onIssueWarning={handleIssueWarning}
+          onDisqualify={handleDisqualify}
+        />
+      )}
     </div>
   );
 }

@@ -1,13 +1,30 @@
 "use client";
 
 import { useState } from "react";
-import { MockExam, DEFAULT_ANTI_CHEAT_CONFIG } from "@/lib/mock-data";
 import { X, Sparkles, Shield, Camera, Mic } from "lucide-react";
 
 interface CreateExamModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (exam: MockExam) => void;
+  onCreate: (examData: {
+    title: string;
+    course_code: string;
+    description: string;
+    duration_minutes: number;
+    total_marks: number;
+    passing_marks: number;
+    start_time: string;
+    end_time: string;
+    anti_cheat_config: {
+      enable_face_tracking: boolean;
+      enable_audio_monitoring: boolean;
+      max_tab_switches: number;
+      max_fullscreen_exits: number;
+      periodic_snapshot_interval_sec: number;
+      allowed_yaw_angle_deg: number;
+      allowed_pitch_angle_deg: number;
+    };
+  }) => void;
 }
 
 export function CreateExamModal({ isOpen, onClose, onCreate }: CreateExamModalProps) {
@@ -33,8 +50,7 @@ export function CreateExamModal({ isOpen, onClose, onCreate }: CreateExamModalPr
     e.preventDefault();
     if (!formData.title || !formData.course_code) return;
 
-    const newExam: MockExam = {
-      id: `exam-${Date.now()}`,
+    onCreate({
       title: formData.title,
       course_code: formData.course_code.toUpperCase(),
       description: formData.description,
@@ -43,41 +59,37 @@ export function CreateExamModal({ isOpen, onClose, onCreate }: CreateExamModalPr
       end_time: new Date(formData.end_time).toISOString(),
       total_marks: Number(formData.total_marks),
       passing_marks: Number(formData.passing_marks),
-      is_published: false,
-      total_candidates: 0,
-      total_questions: 0,
-      created_at: new Date().toISOString(),
       anti_cheat_config: {
-        ...DEFAULT_ANTI_CHEAT_CONFIG,
         enable_face_tracking: formData.enable_face_tracking,
         enable_audio_monitoring: formData.enable_audio_monitoring,
         max_tab_switches: Number(formData.max_tab_switches),
         max_fullscreen_exits: Number(formData.max_fullscreen_exits),
         periodic_snapshot_interval_sec: Number(formData.periodic_snapshot_interval_sec),
+        allowed_yaw_angle_deg: 28,
+        allowed_pitch_angle_deg: 20,
       },
-    };
+    });
 
-    onCreate(newExam);
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-2xl bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200">
+      <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden max-h-[90vh] flex flex-col">
         {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/60">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-2xs">
               <Sparkles className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">Create New Ph.D Examination</h2>
-              <p className="text-xs text-neutral-400">Configure schedule, syllabus, and proctoring parameters</p>
+              <h2 className="text-base font-bold text-slate-900">Create New Examination</h2>
+              <p className="text-xs text-slate-500">Configure schedule, syllabus, and proctoring parameters</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -87,36 +99,36 @@ export function CreateExamModal({ isOpen, onClose, onCreate }: CreateExamModalPr
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
           {/* Basic Exam Info */}
           <div className="space-y-4">
-            <h3 className="text-xs font-semibold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+            <h3 className="text-xs font-bold text-indigo-700 uppercase tracking-wider flex items-center gap-1.5">
               <span>1. Examination Essentials</span>
             </h3>
 
             <div>
-              <label className="block text-neutral-300 font-medium mb-1">Examination Title *</label>
+              <label className="block text-slate-700 font-semibold mb-1">Examination Title *</label>
               <input
                 type="text"
                 required
                 placeholder="e.g. Ph.D Coursework: Computational Complexity & Graph Theory"
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-lg bg-neutral-950 border border-neutral-800 text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500 transition-colors"
+                className="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:bg-white transition-colors"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-neutral-300 font-medium mb-1">Course Code *</label>
+                <label className="block text-slate-700 font-semibold mb-1">Course Code *</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. PHD-CS-902"
                   value={formData.course_code}
                   onChange={(e) => setFormData({ ...formData, course_code: e.target.value })}
-                  className="w-full px-3.5 py-2 rounded-lg bg-neutral-950 border border-neutral-800 text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3.5 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:bg-white"
                 />
               </div>
               <div>
-                <label className="block text-neutral-300 font-medium mb-1">Duration (Minutes) *</label>
+                <label className="block text-slate-700 font-semibold mb-1">Duration (Minutes) *</label>
                 <input
                   type="number"
                   required
@@ -124,88 +136,88 @@ export function CreateExamModal({ isOpen, onClose, onCreate }: CreateExamModalPr
                   max={360}
                   value={formData.duration_minutes}
                   onChange={(e) => setFormData({ ...formData, duration_minutes: Number(e.target.value) })}
-                  className="w-full px-3.5 py-2 rounded-lg bg-neutral-950 border border-neutral-800 text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3.5 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-indigo-600 focus:bg-white"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-neutral-300 font-medium mb-1">Total Marks</label>
+                <label className="block text-slate-700 font-semibold mb-1">Total Marks</label>
                 <input
                   type="number"
                   min={10}
                   value={formData.total_marks}
                   onChange={(e) => setFormData({ ...formData, total_marks: Number(e.target.value) })}
-                  className="w-full px-3.5 py-2 rounded-lg bg-neutral-950 border border-neutral-800 text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3.5 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-indigo-600 focus:bg-white"
                 />
               </div>
               <div>
-                <label className="block text-neutral-300 font-medium mb-1">Passing Marks</label>
+                <label className="block text-slate-700 font-semibold mb-1">Passing Marks</label>
                 <input
                   type="number"
                   min={1}
                   value={formData.passing_marks}
                   onChange={(e) => setFormData({ ...formData, passing_marks: Number(e.target.value) })}
-                  className="w-full px-3.5 py-2 rounded-lg bg-neutral-950 border border-neutral-800 text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3.5 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-indigo-600 focus:bg-white"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-neutral-300 font-medium mb-1">Scope & Instructions</label>
+              <label className="block text-slate-700 font-semibold mb-1">Scope & Instructions</label>
               <textarea
                 rows={2}
                 placeholder="Guidelines, reference materials allowed, or topic coverage..."
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-3.5 py-2 rounded-lg bg-neutral-950 border border-neutral-800 text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500 resize-none"
+                className="w-full px-3.5 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:bg-white resize-none"
               />
             </div>
           </div>
 
           {/* Anti-Cheat Policies Configurator */}
-          <div className="space-y-4 pt-4 border-t border-neutral-800">
+          <div className="space-y-4 pt-4 border-t border-slate-100">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Shield className="w-3.5 h-3.5" />
+              <h3 className="text-xs font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1.5">
+                <Shield className="w-3.5 h-3.5 text-emerald-600" />
                 <span>2. AI Proctoring & Anti-Cheat Protocols</span>
               </h3>
-              <span className="text-[10px] text-neutral-400 font-mono">Edge-AI Enforced</span>
+              <span className="text-[10px] text-slate-500 font-mono">Edge-AI Enforced</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Face Tracking Toggle */}
-              <label className="flex items-start gap-3 p-3 rounded-xl border border-neutral-800 bg-neutral-950/60 hover:border-neutral-700 cursor-pointer">
+              <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-white hover:border-indigo-200 cursor-pointer transition-colors">
                 <input
                   type="checkbox"
                   checked={formData.enable_face_tracking}
                   onChange={(e) => setFormData({ ...formData, enable_face_tracking: e.target.checked })}
-                  className="mt-0.5 rounded border-neutral-700 text-indigo-600 focus:ring-0"
+                  className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                 />
                 <div>
-                  <div className="flex items-center gap-1 text-white font-medium">
-                    <Camera className="w-3.5 h-3.5 text-indigo-400" />
+                  <div className="flex items-center gap-1 text-slate-900 font-semibold">
+                    <Camera className="w-3.5 h-3.5 text-indigo-600" />
                     <span>MediaPipe Face AI</span>
                   </div>
-                  <p className="text-[10px] text-neutral-400 mt-0.5">Detect absence, multiple people, and head turning</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Detect absence, multiple people, and head turning</p>
                 </div>
               </label>
 
               {/* Audio VAD Toggle */}
-              <label className="flex items-start gap-3 p-3 rounded-xl border border-neutral-800 bg-neutral-950/60 hover:border-neutral-700 cursor-pointer">
+              <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-white hover:border-indigo-200 cursor-pointer transition-colors">
                 <input
                   type="checkbox"
                   checked={formData.enable_audio_monitoring}
                   onChange={(e) => setFormData({ ...formData, enable_audio_monitoring: e.target.checked })}
-                  className="mt-0.5 rounded border-neutral-700 text-indigo-600 focus:ring-0"
+                  className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                 />
                 <div>
-                  <div className="flex items-center gap-1 text-white font-medium">
-                    <Mic className="w-3.5 h-3.5 text-emerald-400" />
+                  <div className="flex items-center gap-1 text-slate-900 font-semibold">
+                    <Mic className="w-3.5 h-3.5 text-emerald-600" />
                     <span>Silero Audio VAD</span>
                   </div>
-                  <p className="text-[10px] text-neutral-400 mt-0.5">Detect unauthorized speech and room noise</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Detect unauthorized speech and room noise</p>
                 </div>
               </label>
             </div>
@@ -213,55 +225,55 @@ export function CreateExamModal({ isOpen, onClose, onCreate }: CreateExamModalPr
             {/* Threshold limits */}
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="block text-neutral-300 font-medium mb-1">Max Tab Switches</label>
+                <label className="block text-slate-700 font-medium mb-1">Max Tab Switches</label>
                 <input
                   type="number"
                   min={0}
                   max={10}
                   value={formData.max_tab_switches}
                   onChange={(e) => setFormData({ ...formData, max_tab_switches: Number(e.target.value) })}
-                  className="w-full px-3 py-1.5 rounded-lg bg-neutral-950 border border-neutral-800 text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-indigo-600 focus:bg-white"
                 />
               </div>
               <div>
-                <label className="block text-neutral-300 font-medium mb-1">Max Fullscreen Exits</label>
+                <label className="block text-slate-700 font-medium mb-1">Max Fullscreen Exits</label>
                 <input
                   type="number"
                   min={0}
                   max={10}
                   value={formData.max_fullscreen_exits}
                   onChange={(e) => setFormData({ ...formData, max_fullscreen_exits: Number(e.target.value) })}
-                  className="w-full px-3 py-1.5 rounded-lg bg-neutral-950 border border-neutral-800 text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-indigo-600 focus:bg-white"
                 />
               </div>
               <div>
-                <label className="block text-neutral-300 font-medium mb-1">Snapshot Cadence (Sec)</label>
+                <label className="block text-slate-700 font-medium mb-1">Snapshot Cadence (s)</label>
                 <input
                   type="number"
                   min={15}
                   max={300}
                   value={formData.periodic_snapshot_interval_sec}
                   onChange={(e) => setFormData({ ...formData, periodic_snapshot_interval_sec: Number(e.target.value) })}
-                  className="w-full px-3 py-1.5 rounded-lg bg-neutral-950 border border-neutral-800 text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-indigo-600 focus:bg-white"
                 />
               </div>
             </div>
           </div>
 
           {/* Modal Actions */}
-          <div className="pt-4 border-t border-neutral-800 flex items-center justify-end gap-3">
+          <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-lg border border-neutral-700 text-neutral-300 hover:bg-neutral-800 transition-colors"
+              className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-all shadow-md shadow-indigo-500/20"
+              className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all shadow-md shadow-indigo-600/20"
             >
-              Create Examination
+              Save to Supabase
             </button>
           </div>
         </form>
