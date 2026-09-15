@@ -55,7 +55,15 @@ Every developer is assigned a specific feature domain. When assisting a develope
 
 ---
 
-## ✅ 5. Pre-Commit Pre-Flight Verification
+## 🗄️ 5. Database Management: Always Use Prisma (No Raw SQL)
+
+- **Schema Synchronization**: ALWAYS use Prisma (`prisma/schema.prisma` and `npx prisma db push`) to manage, mutate, and push schema changes to Supabase PostgreSQL.
+- **No Manual SQL**: NEVER require or ask the user to run raw SQL scripts or migrations manually in the Supabase SQL editor.
+- **Server Queries**: Always use the Prisma client (`import { prisma } from "@/lib/prisma"`) for server-side data access, grading, and mutations.
+
+---
+
+## ✅ 6. Pre-Commit Pre-Flight Verification
 
 Before concluding a task or pushing a commit:
 1. Run `npm run lint` — ensure 0 lint errors.
