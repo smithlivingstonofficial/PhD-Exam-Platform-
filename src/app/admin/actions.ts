@@ -1,7 +1,6 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
 export interface SerializedExam {
@@ -56,8 +55,70 @@ export interface SerializedQuestion {
   order_index: number;
 }
 
+export interface AntiCheatConfigInput {
+  enable_face_tracking?: boolean;
+  enable_audio_monitoring?: boolean;
+  max_tab_switches?: number;
+  max_fullscreen_exits?: number;
+  periodic_snapshot_interval_sec?: number;
+  allowed_yaw_angle_deg?: number;
+  allowed_pitch_angle_deg?: number;
+  [key: string]: unknown;
+}
+
+interface ExamDbRecord {
+  id: string;
+  title: string;
+  courseCode: string;
+  description: string | null;
+  durationMinutes: number;
+  startTime: Date;
+  endTime: Date;
+  totalMarks: unknown;
+  passingMarks: unknown;
+  isPublished: boolean;
+  antiCheatConfig: unknown;
+  createdAt: Date;
+  _count: {
+    questions: number;
+    examSessions: number;
+  };
+}
+
+interface ExamSessionDbRecord {
+  id: string;
+  examId: string;
+  studentId: string;
+  status: "SCHEDULED" | "IN_PROGRESS" | "SUBMITTED" | "TERMINATED" | "DISQUALIFIED";
+  startedAt: Date | null;
+  submittedAt: Date | null;
+  finalScore: unknown;
+  violationCount: number;
+  integrityScore: number;
+  exam: {
+    title: string;
+    courseCode: string;
+  };
+  auditLogs: {
+    eventType: string;
+    severity: string;
+  }[];
+}
+
+interface QuestionDbRecord {
+  id: string;
+  examId: string;
+  questionText: string;
+  questionType: "MCQ" | "MULTI_SELECT" | "TEXT";
+  options: unknown;
+  correctAnswers: unknown;
+  marks: unknown;
+  negativeMarks: unknown;
+  orderIndex: number;
+}
+
 // ----------------------------------------------------------------------------
-// 1. GET OVERVIEW DATA (WITH SEED FALLBACK)
+// 1. GET OVERVIEW DATA (LIVE SUPABASE QUERIES)
 // ----------------------------------------------------------------------------
 export async function getAdminOverviewData(): Promise<{
   exams: SerializedExam[];
@@ -86,7 +147,7 @@ export async function getAdminOverviewData(): Promise<{
       orderBy: { updatedAt: "desc" },
     });
 
-    const serializedExams: SerializedExam[] = exams.map((e) => {
+    const serializedExams: SerializedExam[] = (exams as unknown as ExamDbRecord[]).map((e: ExamDbRecord) => {
       const antiCheat = typeof e.antiCheatConfig === "object" && e.antiCheatConfig !== null
         ? (e.antiCheatConfig as Record<string, unknown>)
         : {};
@@ -117,7 +178,7 @@ export async function getAdminOverviewData(): Promise<{
       };
     });
 
-    const serializedCandidates: SerializedCandidate[] = sessions.map((s, idx) => {
+    const serializedCandidates: SerializedCandidate[] = (sessions as unknown as ExamSessionDbRecord[]).map((s: ExamSessionDbRecord, idx: number) => {
       const recentLog = s.auditLogs[0];
       return {
         id: s.id,
@@ -154,7 +215,7 @@ export async function createExamAction(data: {
   passing_marks: number;
   start_time: string;
   end_time: string;
-  anti_cheat_config: Prisma.InputJsonValue;
+  anti_cheat_config: AntiCheatConfigInput;
 }) {
   try {
     const exam = await prisma.exam.create({
@@ -167,7 +228,7 @@ export async function createExamAction(data: {
         passingMarks: data.passing_marks,
         startTime: new Date(data.start_time),
         endTime: new Date(data.end_time),
-        antiCheatConfig: data.anti_cheat_config,
+        antiCheatConfig: data.anti_cheat_config as object,
         isPublished: false,
       },
     });
@@ -209,7 +270,7 @@ export async function getQuestionsForExamAction(examId: string): Promise<Seriali
       orderBy: { orderIndex: "asc" },
     });
 
-    return questions.map((q) => ({
+    return (questions as unknown as QuestionDbRecord[]).map((q: QuestionDbRecord) => ({
       id: q.id,
       exam_id: q.examId,
       question_text: q.questionText,
@@ -246,8 +307,8 @@ export async function createQuestionAction(data: {
         examId: data.exam_id,
         questionText: data.question_text,
         questionType: data.question_type,
-        options: data.options,
-        correctAnswers: data.correct_answers,
+        options: data.options as object,
+        correctAnswers: data.correct_answers as object,
         marks: data.marks,
         negativeMarks: data.negative_marks,
         orderIndex: count + 1,
@@ -339,7 +400,7 @@ export async function terminateSessionAction(sessionId: string) {
 }
 
 // ----------------------------------------------------------------------------
-// 6. CLEAR ALL DATABASE DATA (DANGER ACTION)
+// 8. CLEAR ALL DATABASE DATA (DANGER ACTION)
 // ----------------------------------------------------------------------------
 export async function clearAllDatabaseDataAction(): Promise<{ success: boolean; error?: string }> {
   try {
@@ -360,125 +421,4 @@ export async function clearAllDatabaseDataAction(): Promise<{ success: boolean; 
     console.error("Failed to clear database records:", error);
     return { success: false, error: error instanceof Error ? error.message : "Failed to clear database" };
   }
-}
-
-// ----------------------------------------------------------------------------
-// HELPER: SEED INITIAL SUPABASE DATA VIA PRISMA (ON-DEMAND)
-// ----------------------------------------------------------------------------
-export async function seedInitialSupabaseDataAction() {
-  const exam1 = await prisma.exam.create({
-    data: {
-      title: "Ph.D Coursework: Research Methodology & Statistical Modeling",
-      courseCode: "PHD-RM-901",
-      description: "Assessment on empirical design, hypothesis formulation, ANOVA/MANOVA modeling, and ethics.",
-      durationMinutes: 90,
-      startTime: new Date(),
-      endTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      totalMarks: 100,
-      passingMarks: 50,
-      isPublished: true,
-      antiCheatConfig: {
-        enable_face_tracking: true,
-        enable_audio_monitoring: true,
-        max_tab_switches: 3,
-        max_fullscreen_exits: 3,
-        periodic_snapshot_interval_sec: 60,
-        allowed_yaw_angle_deg: 28,
-        allowed_pitch_angle_deg: 20,
-      },
-    },
-  });
-
-  await prisma.exam.create({
-    data: {
-      title: "Ph.D Advanced Computer Science: Edge AI & Distributed Systems",
-      courseCode: "PHD-CS-904",
-      description: "Assessment on WebAssembly inference optimization, consensus mechanisms, and federated learning.",
-      durationMinutes: 120,
-      startTime: new Date(),
-      endTime: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
-      totalMarks: 100,
-      passingMarks: 60,
-      isPublished: false,
-      antiCheatConfig: {
-        enable_face_tracking: true,
-        enable_audio_monitoring: true,
-        max_tab_switches: 2,
-        max_fullscreen_exits: 2,
-        periodic_snapshot_interval_sec: 45,
-        allowed_yaw_angle_deg: 25,
-        allowed_pitch_angle_deg: 18,
-      },
-    },
-  });
-
-  // Seed Questions for Exam 1
-  await prisma.question.createMany({
-    data: [
-      {
-        examId: exam1.id,
-        questionText: "In quantitative research design, which statistical test is most appropriate when comparing the means of three or more independent groups with normally distributed data?",
-        questionType: "MCQ",
-        options: [
-          { id: "a", text: "Student's Independent Samples t-test" },
-          { id: "b", text: "One-Way Analysis of Variance (ANOVA)" },
-          { id: "c", text: "Mann-Whitney U Test" },
-          { id: "d", text: "Pearson Chi-Square Test of Independence" },
-        ],
-        correctAnswers: ["b"],
-        marks: 2,
-        negativeMarks: 0.5,
-        orderIndex: 1,
-      },
-      {
-        examId: exam1.id,
-        questionText: "Select all criteria necessary for establishing causal inference in empirical research:",
-        questionType: "MULTI_SELECT",
-        options: [
-          { id: "a", text: "Temporal precedence (Cause precedes Effect in time)" },
-          { id: "b", text: "Empirical covariance between variables" },
-          { id: "c", text: "Non-spuriousness (Confounding variables ruled out)" },
-          { id: "d", text: "Qualitative narrative endorsement by domain experts" },
-        ],
-        correctAnswers: ["a", "b", "c"],
-        marks: 4,
-        negativeMarks: 1.0,
-        orderIndex: 2,
-      },
-    ],
-  });
-
-  // Seed sample sessions for live monitor
-  const dummyStudentId1 = "00000000-0000-0000-0000-000000000001";
-  const dummyStudentId2 = "00000000-0000-0000-0000-000000000002";
-  const dummyStudentId3 = "00000000-0000-0000-0000-000000000003";
-
-  await prisma.examSession.createMany({
-    data: [
-      {
-        examId: exam1.id,
-        studentId: dummyStudentId1,
-        status: "IN_PROGRESS",
-        startedAt: new Date(),
-        violationCount: 0,
-        integrityScore: 98,
-      },
-      {
-        examId: exam1.id,
-        studentId: dummyStudentId2,
-        status: "IN_PROGRESS",
-        startedAt: new Date(),
-        violationCount: 2,
-        integrityScore: 82,
-      },
-      {
-        examId: exam1.id,
-        studentId: dummyStudentId3,
-        status: "IN_PROGRESS",
-        startedAt: new Date(),
-        violationCount: 4,
-        integrityScore: 62,
-      },
-    ],
-  });
 }
