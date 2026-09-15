@@ -1,0 +1,154 @@
+// ============================================================================
+// PRISMA SCHEMA FOR PH.D ONLINE EXAM PLATFORM (SUPABASE POSTGRESQL)
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")   // Pooled connection string (port 6543)
+  directUrl = env("DIRECT_URL")     // Direct connection string (port 5432)
+}
+
+enum ExamStatus {
+  SCHEDULED
+  IN_PROGRESS
+  SUBMITTED
+  TERMINATED
+  DISQUALIFIED
+}
+
+enum QuestionType {
+  MCQ
+  MULTI_SELECT
+  TEXT
+}
+
+enum SeverityLevel {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ----------------------------------------------------------------------------
+// 1. EXAMS MODEL
+// ----------------------------------------------------------------------------
+model Exam {
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title            String        @db.VarChar(255)
+  courseCode       String        @map("course_code") @db.VarChar(50)
+  description      String?       @db.Text
+  durationMinutes  Int           @default(120) @map("duration_minutes")
+  startTime        DateTime      @map("start_time") @db.Timestamptz(6)
+  endTime          DateTime      @map("end_time") @db.Timestamptz(6)
+  totalMarks       Decimal       @default(100.00) @map("total_marks") @db.Decimal(6, 2)
+  passingMarks     Decimal       @default(40.00) @map("passing_marks") @db.Decimal(6, 2)
+  antiCheatConfig  Json          @default("{\"enable_face_tracking\":true,\"enable_audio_monitoring\":true,\"max_tab_switches\":3,\"max_fullscreen_exits\":3,\"periodic_snapshot_interval_sec\":60}") @map("anti_cheat_config")
+  isPublished      Boolean       @default(false) @map("is_published")
+  createdBy        String?       @map("created_by") @db.Uuid
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  questions        Question[]
+  examSessions     ExamSession[]
+
+  @@map("exams")
+}
+
+// ----------------------------------------------------------------------------
+// 2. QUESTIONS MODEL
+// ----------------------------------------------------------------------------
+model Question {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  examId         String         @map("exam_id") @db.Uuid
+  questionText   String         @map("question_text") @db.Text
+  questionType   QuestionType   @map("question_type")
+  options        Json           @default("[]") // Array of [{ id: "a", text: "Option A" }]
+  correctAnswers Json           @default("[]") @map("correct_answers") // Hidden from candidate queries
+  explanation    String?        @db.Text
+  marks          Decimal        @default(1.00) @db.Decimal(5, 2)
+  negativeMarks  Decimal        @default(0.00) @map("negative_marks") @db.Decimal(5, 2)
+  orderIndex     Int            @default(0) @map("order_index")
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  exam           Exam           @relation(fields: [examId], references: [id], onDelete: Cascade)
+  sessionAnswers SessionAnswer[]
+
+  @@index([examId, orderIndex])
+  @@map("questions")
+}
+
+// ----------------------------------------------------------------------------
+// 3. EXAM SESSIONS MODEL (Candidate Enrollment & Progress)
+// ----------------------------------------------------------------------------
+model ExamSession {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  examId         String         @map("exam_id") @db.Uuid
+  studentId      String         @map("student_id") @db.Uuid
+  status         ExamStatus     @default(SCHEDULED)
+  startedAt      DateTime?      @map("started_at") @db.Timestamptz(6)
+  expiresAt      DateTime?      @map("expires_at") @db.Timestamptz(6)
+  submittedAt    DateTime?      @map("submitted_at") @db.Timestamptz(6)
+  finalScore     Decimal?       @map("final_score") @db.Decimal(6, 2)
+  violationCount Int            @default(0) @map("violation_count")
+  integrityScore Int            @default(100) @map("integrity_score")
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  exam           Exam           @relation(fields: [examId], references: [id], onDelete: Cascade)
+  answers        SessionAnswer[]
+  auditLogs      ExamAuditLog[]
+
+  @@unique([examId, studentId])
+  @@index([studentId, examId])
+  @@map("exam_sessions")
+}
+
+// ----------------------------------------------------------------------------
+// 4. SESSION ANSWERS MODEL
+// ----------------------------------------------------------------------------
+model SessionAnswer {
+  id                String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId         String      @map("session_id") @db.Uuid
+  questionId        String      @map("question_id") @db.Uuid
+  selectedOptions   Json        @default("[]") @map("selected_options")
+  textResponse      String?     @map("text_response") @db.Text
+  isMarkedForReview Boolean     @default(false) @map("is_marked_for_review")
+  updatedAt         DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  session           ExamSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  question          Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, questionId])
+  @@index([sessionId, questionId])
+  @@map("session_answers")
+}
+
+// ----------------------------------------------------------------------------
+// 5. EXAM AUDIT & INCIDENT LOGS MODEL
+// ----------------------------------------------------------------------------
+model ExamAuditLog {
+  id                 String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId          String        @map("session_id") @db.Uuid
+  eventType          String        @map("event_type") @db.VarChar(50)
+  severity           SeverityLevel
+  timestamp          DateTime      @default(now()) @db.Timestamptz(6)
+  evidenceSnapshotUrl String?      @map("evidence_snapshot_url") @db.Text
+  evidenceAudioUrl   String?       @map("evidence_audio_url") @db.Text
+  details            Json?         @default("{}")
+
+  // Relations
+  session            ExamSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, timestamp(sort: Desc)])
+  @@map("exam_audit_logs")
+}
