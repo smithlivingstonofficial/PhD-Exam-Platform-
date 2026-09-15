@@ -130,11 +130,15 @@ function QuestionsBankContent() {
               onChange={(e) => setSelectedExamId(e.target.value)}
               className="block font-bold text-xs bg-slate-50 text-indigo-700 border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-600"
             >
-              {exams.map((exam) => (
-                <option key={exam.id} value={exam.id}>
-                  {exam.course_code}: {exam.title}
-                </option>
-              ))}
+              {exams.length === 0 ? (
+                <option value="">No exams found — create an exam first</option>
+              ) : (
+                exams.map((exam) => (
+                  <option key={exam.id} value={exam.id}>
+                    {exam.course_code}: {exam.title}
+                  </option>
+                ))
+              )}
             </select>
           </div>
         </div>

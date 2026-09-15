@@ -64,7 +64,7 @@ export async function getAdminOverviewData(): Promise<{
   candidates: SerializedCandidate[];
 }> {
   try {
-    let exams = await prisma.exam.findMany({
+    const exams = await prisma.exam.findMany({
       include: {
         _count: {
           select: { questions: true, examSessions: true },
@@ -72,19 +72,6 @@ export async function getAdminOverviewData(): Promise<{
       },
       orderBy: { createdAt: "desc" },
     });
-
-    // If database has 0 exams, seed initial Ph.D exams directly into Supabase
-    if (exams.length === 0) {
-      await seedInitialSupabaseData();
-      exams = await prisma.exam.findMany({
-        include: {
-          _count: {
-            select: { questions: true, examSessions: true },
-          },
-        },
-        orderBy: { createdAt: "desc" },
-      });
-    }
 
     const sessions = await prisma.examSession.findMany({
       include: {
@@ -352,9 +339,33 @@ export async function terminateSessionAction(sessionId: string) {
 }
 
 // ----------------------------------------------------------------------------
-// HELPER: SEED INITIAL SUPABASE DATA VIA PRISMA
+// 6. CLEAR ALL DATABASE DATA (DANGER ACTION)
 // ----------------------------------------------------------------------------
-async function seedInitialSupabaseData() {
+export async function clearAllDatabaseDataAction(): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Delete in reverse relational order (cascade-safe)
+    await prisma.examAuditLog.deleteMany();
+    await prisma.sessionAnswer.deleteMany();
+    await prisma.examSession.deleteMany();
+    await prisma.question.deleteMany();
+    await prisma.exam.deleteMany();
+
+    revalidatePath("/admin");
+    revalidatePath("/admin/exams");
+    revalidatePath("/admin/questions");
+    revalidatePath("/admin/proctor");
+    revalidatePath("/admin/candidates");
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to clear database records:", error);
+    return { success: false, error: error instanceof Error ? error.message : "Failed to clear database" };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// HELPER: SEED INITIAL SUPABASE DATA VIA PRISMA (ON-DEMAND)
+// ----------------------------------------------------------------------------
+export async function seedInitialSupabaseDataAction() {
   const exam1 = await prisma.exam.create({
     data: {
       title: "Ph.D Coursework: Research Methodology & Statistical Modeling",

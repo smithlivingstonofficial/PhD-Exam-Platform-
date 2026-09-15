@@ -82,47 +82,55 @@ export default function CandidatesRegistryPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
-              {filtered.map((c) => (
-                <tr key={c.id} className="hover:bg-slate-50/70 transition-colors">
-                  <td className="py-3.5 px-4">
-                    <span className="font-bold text-slate-900 block">{c.name}</span>
-                    <span className="text-[11px] text-slate-400 font-mono flex items-center gap-1 mt-0.5">
-                      <Mail className="w-3 h-3 text-slate-400" /> {c.email}
-                    </span>
-                  </td>
-                  <td className="py-3.5 px-4 font-mono text-[11px] text-indigo-700 font-bold">{c.exam_id}</td>
-                  <td className="py-3.5 px-4">
-                    <span
-                      className={`text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full border ${
-                        c.status === "SUBMITTED"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : c.status === "DISQUALIFIED"
-                          ? "bg-rose-50 text-rose-700 border-rose-200"
-                          : "bg-indigo-50 text-indigo-700 border-indigo-200"
-                      }`}
-                    >
-                      {c.status}
-                    </span>
-                  </td>
-                  <td className="py-3.5 px-4 font-mono font-bold text-slate-800">{c.violation_count}</td>
-                  <td className="py-3.5 px-4">
-                    <span
-                      className={`text-xs font-bold px-2 py-0.5 rounded-md ${
-                        c.integrity_score >= 90
-                          ? "text-emerald-700 bg-emerald-50"
-                          : c.integrity_score >= 75
-                          ? "text-amber-700 bg-amber-50"
-                          : "text-rose-700 bg-rose-50"
-                      }`}
-                    >
-                      {c.integrity_score}%
-                    </span>
-                  </td>
-                  <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-900">
-                    {c.final_score !== null ? `${c.final_score} / 100` : "In Progress"}
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-xs text-slate-400">
+                    No candidate sessions recorded in the database yet.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filtered.map((c) => (
+                  <tr key={c.id} className="hover:bg-slate-50/70 transition-colors">
+                    <td className="py-3.5 px-4">
+                      <span className="font-bold text-slate-900 block">{c.name}</span>
+                      <span className="text-[11px] text-slate-400 font-mono flex items-center gap-1 mt-0.5">
+                        <Mail className="w-3 h-3 text-slate-400" /> {c.email}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 font-mono text-[11px] text-indigo-700 font-bold">{c.exam_id}</td>
+                    <td className="py-3.5 px-4">
+                      <span
+                        className={`text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full border ${
+                          c.status === "SUBMITTED"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : c.status === "DISQUALIFIED"
+                            ? "bg-rose-50 text-rose-700 border-rose-200"
+                            : "bg-indigo-50 text-indigo-700 border-indigo-200"
+                        }`}
+                      >
+                        {c.status}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 font-mono font-bold text-slate-800">{c.violation_count}</td>
+                    <td className="py-3.5 px-4">
+                      <span
+                        className={`text-xs font-bold px-2 py-0.5 rounded-md ${
+                          c.integrity_score >= 90
+                            ? "text-emerald-700 bg-emerald-50"
+                            : c.integrity_score >= 75
+                            ? "text-amber-700 bg-amber-50"
+                            : "text-rose-700 bg-rose-50"
+                        }`}
+                      >
+                        {c.integrity_score}%
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-900">
+                      {c.final_score !== null ? `${c.final_score} / 100` : "In Progress"}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         )}
