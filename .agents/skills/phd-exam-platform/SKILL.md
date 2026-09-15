@@ -104,3 +104,19 @@ This skill contains the technical principles, architectural constraints, and imp
     - Amber = Answered & Marked for Review
     - Slate/Gray = Not Visited / Unanswered
   - **Floating Proctor PIP**: Draggable or corner-docked webcam preview with real-time AI status indicators (e.g. "Face Detected", "Mic Active").
+
+---
+
+## 6. Git Workflow, Branch Protection & Team Isolation Rules
+
+1. **NEVER Commit to `main` Directly**:
+   - The agent MUST check the current branch before committing (`git branch --show-current`).
+   - If on `main`, immediately checkout a branch: `git checkout -b feat/<feature-name>`.
+2. **Feature-Sliced Isolation**:
+   - Work ONLY inside the developer's assigned feature directory (`src/features/<feature-name>/`) and test sandbox (`src/app/sandbox/<feature-name>/`).
+   - Do NOT edit other developers' feature folders or shared root layouts (`app/page.tsx`, `layout.tsx`).
+3. **Shared Contracts**:
+   - All shared types are imported from `@/types` (`src/types/index.ts`). Do not modify existing contracts without team consensus.
+4. **Pre-Push Validation**:
+   - Always run `npm run lint` and `npm run build` to verify 0 errors before committing or opening a pull request.
+
