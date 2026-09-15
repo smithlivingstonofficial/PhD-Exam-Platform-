@@ -1,73 +1,85 @@
-# GitHub Team Collaboration & Development Workflow Guide
+# Multi-Developer Collaboration Playbook: Zero Merge Conflicts
 
-This document outlines the collaborative engineering standards, Git branching models, project tracking, and review workflows for developing the **Ph.D Online Exam Platform**.
+When **every team member is a developer building a different feature**, the #1 danger is stepping on each other's toes, breaking shared files like `app/page.tsx` or `layout.tsx`, and dealing with painful Git merge conflicts.
 
----
-
-## 1. Team Roles & Responsibilities
-
-| Role | Primary Responsibilities | Key Directories / Files |
-| :--- | :--- | :--- |
-| **Lead / DevOps** | Architecture integrity, CI/CD pipelines, Vercel/Cloudflare configuration, branch protection | `.github/`, `next.config.ts`, `plan.md` |
-| **Frontend Engineer** | Exam viewport, responsive question palette, candidate dashboard, exam timer, styling | `src/app/exam/`, `src/components/ui/`, `src/app/globals.css` |
-| **AI / Edge-ML Engineer** | MediaPipe FaceLandmarker integration, Silero VAD audio worker, canvas snapshot compressor | `src/lib/proctor/`, `src/components/proctor/` |
-| **Backend & Cloud Engineer**| Supabase schema, RLS policies, Cloudflare R2 presigned URLs, grading API | `src/lib/supabase/`, `src/app/api/` |
+This playbook establishes a **Modular Feature-Sliced Architecture** where every developer can build, test, and commit their feature with complete autonomy.
 
 ---
 
-## 2. Git Branching Strategy
+## 1. Feature Ownership Matrix
 
-We follow the **GitHub Flow** with a protected `main` branch and feature branches:
+Each developer owns one isolated feature module in `src/features/` and one test sandbox in `src/app/sandbox/`:
 
+| Developer | Assigned Feature | Feature Code Directory | Isolated Sandbox Route | Key Deliverable |
+| :--- | :--- | :--- | :--- | :--- |
+| **Developer 1** | **Visual AI Proctoring** | `src/features/proctor-vision/` | `/sandbox/vision` | MediaPipe FaceLandmarker, head pose (Yaw/Pitch), absence detector, canvas WebP snapshot generator. |
+| **Developer 2** | **Audio AI Proctoring** | `src/features/proctor-audio/` | `/sandbox/audio` | Silero VAD (human speech detector in WebAssembly), Web Audio RMS decibel meter, 5s Opus clip recorder. |
+| **Developer 3** | **Anti-Cheat Security** | `src/features/anti-cheat/` | `/sandbox/security` | Fullscreen locking, Page Visibility / Alt-Tab traps, DevTools inhibitors, clipboard & right-click blockers. |
+| **Developer 4** | **Exam Experience & UI** | `src/features/exam-session/` | `/sandbox/exam` | Question card, option selector, question grid navigation palette, review flags, local offline answer cache. |
+| **Developer 5** | **Examiner Dashboard** | `src/features/examiner-dashboard/`| `/sandbox/dashboard` | Live candidate monitoring grid, integrity health score (100% to 0%), real-time incident feed & evidence player. |
+| **Developer 6 / Lead** | **Supabase & Cloudflare R2** | `src/features/storage-r2/`, `src/lib/` | `/api/` | Database schema, RLS policies, Cloudflare R2 pre-signed upload URLs, serverless grading action. |
+
+---
+
+## 2. The 3 Golden Rules of Zero Conflict
+
+### Rule 1: Code ONLY inside your feature folder
+- Work exclusively inside `src/features/<your-feature>/` and `src/app/sandbox/<your-feature>/`.
+- **NEVER** edit another developer's feature folder directly.
+- **NEVER** modify `src/app/page.tsx`, `src/app/layout.tsx`, or `src/app/globals.css` without prior team agreement.
+
+### Rule 2: Shared Contracts Live in `src/types/index.ts`
+- All interfaces (`Question`, `ExamSession`, `ExamIncident`, `ProctorStatus`, etc.) are defined centrally in `src/types/index.ts`.
+- Every developer imports from `@/types`.
+- If you need a new field in a shared type, propose it in the team chat or open an issue before changing `src/types/index.ts`.
+
+### Rule 3: Develop Inside Your Isolated Sandbox
+- Run `npm run dev`.
+- Go to `http://localhost:3000/sandbox`.
+- Click into your feature's playground (e.g., `/sandbox/vision` or `/sandbox/audio`).
+- You can test, iterate, and reload your feature without needing anyone else's code to be finished!
+
+---
+
+## 3. Git Branching Workflow for Developers
+
+### Step 1: Create your feature branch from `main`
+```bash
+git checkout main
+git pull origin main
+git checkout -b feat/proctor-vision   # Example for Developer 1
 ```
-[ main ] ─────── (Protected: Production-ready, auto-deploys to Vercel)
-   │
-   ├─► [ feat/mediapipe-face-tracking ] ──► (PR with CI Checks) ──► Merge to main
-   ├─► [ feat/silero-vad-audio ] ────────► (PR with CI Checks) ──► Merge to main
-   ├─► [ feat/fullscreen-lockdown ] ─────► (PR with CI Checks) ──► Merge to main
-   └─► [ fix/timer-drift ] ──────────────► (PR with CI Checks) ──► Merge to main
+
+### Step 2: Work on your feature
+- Add files to your feature directory and sandbox.
+- Commit frequently with clear messages:
+```bash
+git add src/features/proctor-vision/ src/app/sandbox/vision/
+git commit -m "feat(proctor-vision): add mediapipe facelandmarker hook"
 ```
 
-### Branch Naming Conventions:
-- Features: `feat/<short-description>` (e.g., `feat/audio-vad-detector`)
-- Bug fixes: `fix/<short-description>` (e.g., `fix/fullscreen-exit-counter`)
-- Performance: `perf/<short-description>` (e.g., `perf/canvas-webp-compression`)
-- Documentation: `docs/<short-description>` (e.g., `docs/supabase-rls-setup`)
+### Step 3: Keep your branch up to date with `main`
+Before opening a PR or merging, sync latest changes from teammates:
+```bash
+git fetch origin
+git rebase origin/main   # Or git merge origin/main
+```
+
+### Step 4: Push and Open a Pull Request
+```bash
+git push -u origin feat/proctor-vision
+```
+Open a PR on GitHub. Because your code is isolated in `src/features/<your-feature>/` and `src/app/sandbox/<your-feature>/`, **Git will merge cleanly with 0 conflicts!**
 
 ---
 
-## 3. Commit Message Standards (Conventional Commits)
-
-Format: `<type>(<scope>): <short description>`
-
-Examples:
-- `feat(proctor): integrate mediapipe face mesh for head pose yaw/pitch`
-- `feat(security): add window blur and visibilitychange alt-tab detector`
-- `fix(timer): prevent client clock manipulation with postgres timestamp check`
-- `docs(readme): update project architecture and team setup instructions`
-
-Allowed Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`.
-
----
-
-## 4. GitHub Project Board (Kanban Sprints)
-
-Set up a **GitHub Project (v2)** with columns:
-1. 📋 **Product Backlog**: Raw user stories and future enhancements.
-2. 🎯 **Sprint Backlog (Ready)**: Well-defined issues ready for development in the current sprint.
-3. 🚧 **In Progress**: Actively being coded (max 2 active issues per developer).
-4. 🔍 **In Code Review**: Pull Requests opened, awaiting peer review.
-5. ✅ **Done**: Merged into `main` and verified on Vercel deployment.
-
----
-
-## 5. Pull Request & Code Review Process
-
-1. **Self-Check Before Opening PR**:
-   - Run `npm run lint` locally — ensure 0 errors.
-   - Run `npm run build` locally — ensure TypeScript compiles cleanly.
-2. **Review Criteria**:
-   - **Performance**: Is any heavy video/audio streaming routed through Next.js serverless functions? (Strict violation: all ML must be client-side).
-   - **Security**: Are questions sent to the client stripped of `correct_answers`?
-   - **Cost**: Are media uploads hitting Cloudflare R2 directly with pre-signed URLs?
-3. **Approval Rule**: At least **1 peer review approval** is required before merging.
+## 4. Final Integration Step (When all features are ready)
+Once each developer finishes their feature sandbox, the team integrates them into the final exam page (`src/app/exam/page.tsx`):
+```tsx
+// Final integration is just importing the tested components!
+import { VisionProctorView } from "@/features/proctor-vision";
+import { AudioProctorView } from "@/features/proctor-audio";
+import { AntiCheatProvider } from "@/features/anti-cheat";
+import { QuestionPalette, QuestionCard } from "@/features/exam-session";
+```
+Everything plugs in seamlessly like Lego bricks!
