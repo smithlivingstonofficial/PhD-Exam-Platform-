@@ -1,10 +1,36 @@
 // ==========================================
 // SHARED DOMAIN TYPES & CONTRACTS
 // All developers should import from this file
-// Do not modify without team consensus
+// Do not modify existing fields without team consensus
 // ==========================================
 
-export type ExamStatus = 'SCHEDULED' | 'IN_PROGRESS' | 'SUBMITTED' | 'TERMINATED' | 'DISQUALIFIED';
+export type ExamStatus =
+  | 'SCHEDULED'
+  | 'WAITING_ROOM'
+  | 'IN_PROGRESS'
+  | 'SUBMITTED'
+  | 'TERMINATED'
+  | 'DISQUALIFIED'
+  | 'ABSENT'
+  | 'TECHNICAL_FAILURE';
+
+export type AttendanceStatus =
+  | 'NOT_REPORTED'
+  | 'LOGGED_IN'
+  | 'IN_EXAM'
+  | 'SUBMITTED'
+  | 'ABSENT'
+  | 'DISQUALIFIED'
+  | 'TECHNICAL_FAILURE';
+
+export type SlotStatus =
+  | 'SCHEDULED'
+  | 'LOGIN_OPEN'
+  | 'IN_PROGRESS'
+  | 'CONCLUDED'
+  | 'CANCELLED';
+
+export type QuestionScope = 'COMMON' | 'DEPARTMENT_SPECIFIC';
 
 export type QuestionType = 'MCQ' | 'MULTI_SELECT' | 'TEXT';
 
@@ -48,6 +74,10 @@ export interface Question {
   marks: number;
   negative_marks: number;
   order_index: number;
+  // Enhanced fields
+  scope?: QuestionScope;
+  department_id?: string | null;
+  section_name?: string | null;
   // NOTE: correct_answers is strictly excluded on client-side
 }
 
@@ -62,6 +92,16 @@ export interface ExamSession {
   final_score: number | null;
   violation_count: number;
   integrity_score: number; // 0 to 100
+  // Enhanced fields
+  slot_id?: string | null;
+  attendance_status?: AttendanceStatus;
+  login_at?: string | null;
+  common_score?: number | null;
+  department_score?: number | null;
+  is_passed?: boolean | null;
+  attempt_number?: number;
+  is_eligible_for_retest?: boolean;
+  retest_slot_id?: string | null;
 }
 
 export interface SessionAnswer {
@@ -94,4 +134,47 @@ export interface ProctorStatus {
   noiseLevelDb: number;
   fullscreenActive: boolean;
   tabActive: boolean;
+}
+
+// ----------------------------------------------------------------------------
+// ACADEMIC DEPARTMENT & SCHOLAR ENTITIES
+// ----------------------------------------------------------------------------
+
+export interface Department {
+  id: string;
+  code: string; // e.g. "CSE", "MECH"
+  name: string;
+  description?: string | null;
+  created_at: string;
+  scholar_count?: number;
+  question_count?: number;
+}
+
+export interface Student {
+  id: string;
+  reg_number: string;
+  full_name: string;
+  email: string;
+  phone?: string | null;
+  department_id: string;
+  department_code?: string;
+  department_name?: string;
+  access_code: string;
+  created_at: string;
+}
+
+export interface ExamSlot {
+  id: string;
+  exam_id: string;
+  slot_number: number;
+  slot_name: string;
+  login_opens_at: string;
+  start_time: string;
+  join_window_closes_at: string;
+  end_time: string;
+  status: SlotStatus;
+  is_retest_slot: boolean;
+  created_at: string;
+  enrolled_count?: number;
+  attended_count?: number;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Sparkles, Shield, Camera, Mic } from "lucide-react";
+import { X, Sparkles, Shield, Camera, Mic, Clock } from "lucide-react";
 
 interface CreateExamModalProps {
   isOpen: boolean;
@@ -15,6 +15,8 @@ interface CreateExamModalProps {
     passing_marks: number;
     start_time: string;
     end_time: string;
+    login_opens_at?: string;
+    join_window_minutes?: number;
     anti_cheat_config: {
       enable_face_tracking: boolean;
       enable_audio_monitoring: boolean;
@@ -37,6 +39,8 @@ export function CreateExamModal({ isOpen, onClose, onCreate }: CreateExamModalPr
     passing_marks: 50,
     start_time: "2026-09-20T10:00",
     end_time: "2026-09-20T12:00",
+    login_opens_at: "2026-09-20T09:45",
+    join_window_minutes: 15,
     enable_face_tracking: true,
     enable_audio_monitoring: true,
     max_tab_switches: 3,
@@ -57,6 +61,8 @@ export function CreateExamModal({ isOpen, onClose, onCreate }: CreateExamModalPr
       duration_minutes: Number(formData.duration_minutes),
       start_time: new Date(formData.start_time).toISOString(),
       end_time: new Date(formData.end_time).toISOString(),
+      login_opens_at: formData.login_opens_at ? new Date(formData.login_opens_at).toISOString() : undefined,
+      join_window_minutes: Number(formData.join_window_minutes),
       total_marks: Number(formData.total_marks),
       passing_marks: Number(formData.passing_marks),
       anti_cheat_config: {
@@ -83,8 +89,8 @@ export function CreateExamModal({ isOpen, onClose, onCreate }: CreateExamModalPr
               <Sparkles className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900">Create New Examination</h2>
-              <p className="text-xs text-slate-500">Configure schedule, syllabus, and proctoring parameters</p>
+              <h2 className="text-base font-bold text-slate-900">Create New Ph.D Examination</h2>
+              <p className="text-xs text-slate-500">Configure schedule, Slot 1 window timings, and proctoring parameters</p>
             </div>
           </div>
           <button
@@ -108,7 +114,7 @@ export function CreateExamModal({ isOpen, onClose, onCreate }: CreateExamModalPr
               <input
                 type="text"
                 required
-                placeholder="e.g. Ph.D Coursework: Computational Complexity & Graph Theory"
+                placeholder="e.g. Ph.D Qualifying Examination: Research Methodology & Core Disciplines"
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 className="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:bg-white transition-colors"
@@ -121,14 +127,14 @@ export function CreateExamModal({ isOpen, onClose, onCreate }: CreateExamModalPr
                 <input
                   type="text"
                   required
-                  placeholder="e.g. PHD-CS-902"
+                  placeholder="e.g. PHD-QUAL-2026"
                   value={formData.course_code}
                   onChange={(e) => setFormData({ ...formData, course_code: e.target.value })}
                   className="w-full px-3.5 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:bg-white"
                 />
               </div>
               <div>
-                <label className="block text-slate-700 font-semibold mb-1">Duration (Minutes) *</label>
+                <label className="block text-slate-700 font-semibold mb-1">Candidate Duration (Minutes) *</label>
                 <input
                   type="number"
                   required
@@ -153,7 +159,7 @@ export function CreateExamModal({ isOpen, onClose, onCreate }: CreateExamModalPr
                 />
               </div>
               <div>
-                <label className="block text-slate-700 font-semibold mb-1">Passing Marks</label>
+                <label className="block text-slate-700 font-semibold mb-1">Passing Threshold Marks</label>
                 <input
                   type="number"
                   min={1}
@@ -168,11 +174,78 @@ export function CreateExamModal({ isOpen, onClose, onCreate }: CreateExamModalPr
               <label className="block text-slate-700 font-semibold mb-1">Scope & Instructions</label>
               <textarea
                 rows={2}
-                placeholder="Guidelines, reference materials allowed, or topic coverage..."
+                placeholder="Guidelines, dual-paper structure (Part A Common + Part B Departmental), or topic coverage..."
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 className="w-full px-3.5 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:bg-white resize-none"
               />
+            </div>
+          </div>
+
+          {/* Timing Window & Slot 1 Controls */}
+          <div className="space-y-4 pt-4 border-t border-slate-100">
+            <h3 className="text-xs font-bold text-violet-700 uppercase tracking-wider flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-violet-600" />
+              <span>2. Server Timing Windows & Slot 1 Parameters</span>
+            </h3>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">
+                  Candidate Login Window Opens
+                </label>
+                <input
+                  type="datetime-local"
+                  required
+                  value={formData.login_opens_at}
+                  onChange={(e) => setFormData({ ...formData, login_opens_at: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 font-mono text-[11px] focus:outline-none focus:border-indigo-600 focus:bg-white"
+                />
+                <span className="text-[10px] text-slate-400 mt-0.5 block">Waiting room check-in & device setup</span>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">
+                  Questions Unlock (Start Time) *
+                </label>
+                <input
+                  type="datetime-local"
+                  required
+                  value={formData.start_time}
+                  onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 font-mono text-[11px] focus:outline-none focus:border-indigo-600 focus:bg-white"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">
+                  Join Grace Window (Minutes) *
+                </label>
+                <input
+                  type="number"
+                  min={5}
+                  max={60}
+                  value={formData.join_window_minutes}
+                  onChange={(e) => setFormData({ ...formData, join_window_minutes: Number(e.target.value) })}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:border-indigo-600 focus:bg-white"
+                />
+                <span className="text-[10px] text-slate-400 mt-0.5 block">Late joiners locked out after this period</span>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 font-semibold mb-1">
+                  Hard Session End Time *
+                </label>
+                <input
+                  type="datetime-local"
+                  required
+                  value={formData.end_time}
+                  onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 font-mono text-[11px] focus:outline-none focus:border-indigo-600 focus:bg-white"
+                />
+              </div>
             </div>
           </div>
 
@@ -181,7 +254,7 @@ export function CreateExamModal({ isOpen, onClose, onCreate }: CreateExamModalPr
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1.5">
                 <Shield className="w-3.5 h-3.5 text-emerald-600" />
-                <span>2. AI Proctoring & Anti-Cheat Protocols</span>
+                <span>3. AI Proctoring & Anti-Cheat Protocols</span>
               </h3>
               <span className="text-[10px] text-slate-500 font-mono">Edge-AI Enforced</span>
             </div>
@@ -273,7 +346,7 @@ export function CreateExamModal({ isOpen, onClose, onCreate }: CreateExamModalPr
               type="submit"
               className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all shadow-md shadow-indigo-600/20"
             >
-              Save to Supabase
+              Save Exam & Slot 1 to Supabase
             </button>
           </div>
         </form>

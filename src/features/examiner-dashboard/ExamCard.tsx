@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { SerializedExam } from "@/app/admin/actions";
-import { Clock, Award, Users, Camera, Mic, ShieldAlert, ArrowUpRight, HelpCircle } from "lucide-react";
+import { Clock, Award, Users, Camera, Mic, ShieldAlert, ArrowUpRight, HelpCircle, Layers } from "lucide-react";
 
 interface ExamCardProps {
   exam: SerializedExam;
@@ -55,9 +55,30 @@ export function ExamCard({ exam, onTogglePublish }: ExamCardProps) {
           </div>
         </div>
 
+        {/* Exam Slots Active */}
+        {exam.slots && exam.slots.length > 0 && (
+          <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1 flex items-center gap-1">
+              <Layers className="w-3 h-3 text-indigo-600" /> Slots:
+            </span>
+            {exam.slots.map((s) => (
+              <span
+                key={s.id}
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                  s.is_retest_slot
+                    ? "bg-violet-50 text-violet-700 border-violet-200"
+                    : "bg-slate-50 text-slate-700 border-slate-200"
+                }`}
+              >
+                {s.slot_name}
+              </span>
+            ))}
+          </div>
+        )}
+
         {/* Anti-Cheat Policies Active */}
         <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between text-[11px] text-slate-600">
-          <span className="font-semibold text-slate-700">Security Protocols:</span>
+          <span className="font-semibold text-slate-700">Security:</span>
           <div className="flex items-center gap-2 font-medium">
             {exam.anti_cheat_config?.enable_face_tracking && (
               <span className="flex items-center gap-1 text-indigo-600" title="Visual AI Active">
@@ -96,10 +117,10 @@ export function ExamCard({ exam, onTogglePublish }: ExamCardProps) {
             </button>
           )}
           <Link
-            href={`/admin/proctor?examId=${exam.id}`}
+            href={`/admin/attendance`}
             className="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition-colors shadow-xs"
           >
-            <span>Live Monitor</span>
+            <span>Live Hall</span>
             <ArrowUpRight className="w-3 h-3" />
           </Link>
         </div>

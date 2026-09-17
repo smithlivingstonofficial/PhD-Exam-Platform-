@@ -7,41 +7,51 @@ import {
   getQuestionsForExamAction, 
   createQuestionAction, 
   deleteQuestionAction,
+  getDepartmentsAction,
   SerializedExam,
-  SerializedQuestion
+  SerializedQuestion,
+  SerializedDepartment
 } from "@/app/admin/actions";
 import { QuestionEditorModal } from "@/features/examiner-dashboard";
 import { 
   Plus, 
-  HelpCircle, 
   CheckCircle2, 
   ShieldCheck, 
   Award, 
   Trash2, 
-  Layers,
-  RefreshCw
+  Layers, 
+  RefreshCw, 
+  Building2 
 } from "lucide-react";
 
 function QuestionsBankContent() {
   const searchParams = useSearchParams();
   const [exams, setExams] = useState<SerializedExam[]>([]);
+  const [departments, setDepartments] = useState<SerializedDepartment[]>([]);
   const [selectedExamId, setSelectedExamId] = useState<string>("");
   const [questions, setQuestions] = useState<SerializedQuestion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [scopeFilter, setScopeFilter] = useState<string>("ALL");
+  const [deptFilter, setDeptFilter] = useState<string>("ALL");
 
-  // Load available exams
+  // Load available exams and departments
   useEffect(() => {
     let ignore = false;
     async function init() {
-      const data = await getAdminOverviewData();
+      const [overviewData, deptsData] = await Promise.all([
+        getAdminOverviewData(),
+        getDepartmentsAction(),
+      ]);
       if (ignore) return;
-      setExams(data.exams);
+      setExams(overviewData.exams);
+      setDepartments(deptsData);
+
       const urlExamId = searchParams.get("examId");
-      if (urlExamId && data.exams.some((e) => e.id === urlExamId)) {
+      if (urlExamId && overviewData.exams.some((e) => e.id === urlExamId)) {
         setSelectedExamId(urlExamId);
-      } else if (data.exams.length > 0) {
-        setSelectedExamId(data.exams[0].id);
+      } else if (overviewData.exams.length > 0) {
+        setSelectedExamId(overviewData.exams[0].id);
       }
     }
     init();
@@ -60,24 +70,19 @@ function QuestionsBankContent() {
   }, []);
 
   useEffect(() => {
-    let ignore = false;
+    let isMounted = true;
     async function fetchQuestions() {
-      if (selectedExamId) {
-        const result = await getQuestionsForExamAction(selectedExamId);
-        if (!ignore) {
-          setQuestions(result);
-          setIsLoading(false);
-        }
-      } else {
-        await Promise.resolve();
-        if (!ignore) {
-          setIsLoading(false);
-        }
+      if (!selectedExamId) return;
+      setIsLoading(true);
+      const result = await getQuestionsForExamAction(selectedExamId);
+      if (isMounted) {
+        setQuestions(result);
+        setIsLoading(false);
       }
     }
     fetchQuestions();
     return () => {
-      ignore = true;
+      isMounted = false;
     };
   }, [selectedExamId]);
 
@@ -97,14 +102,25 @@ function QuestionsBankContent() {
     }
   };
 
+  // Filter questions
+  const filteredQuestions = questions.filter((q) => {
+    if (scopeFilter === "COMMON" && q.scope !== "COMMON") return false;
+    if (scopeFilter === "DEPT" && q.scope !== "DEPARTMENT_SPECIFIC") return false;
+    if (deptFilter !== "ALL" && q.department_code !== deptFilter) return false;
+    return true;
+  });
+
+  const commonCount = questions.filter((q) => q.scope === "COMMON").length;
+  const deptCount = questions.filter((q) => q.scope === "DEPARTMENT_SPECIFIC").length;
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Question Bank & Rubric Editor</h1>
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Question Bank & Dual-Paper Rubric</h1>
           <p className="text-xs text-slate-500">
-            Author questions with marking rubrics and server-side protected answer keys stored in Supabase
+            Author Part A (Common to all Departments) and Part B (Department Specific) questions with server-cloaked answer keys
           </p>
         </div>
         <button
@@ -117,48 +133,108 @@ function QuestionsBankContent() {
         </button>
       </div>
 
-      {/* Exam Selector Bar */}
-      <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-            <Layers className="w-4 h-4" />
+      {/* Exam & Scope Selector Bar */}
+      <div className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <Layers className="w-4 h-4" />
+            </div>
+            <div className="space-y-0.5">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Target Examination:</span>
+              <select
+                value={selectedExamId}
+                onChange={(e) => setSelectedExamId(e.target.value)}
+                className="block font-bold text-xs bg-slate-50 text-indigo-700 border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-600"
+              >
+                {exams.length === 0 ? (
+                  <option value="">No exams found — create an exam first</option>
+                ) : (
+                  exams.map((exam) => (
+                    <option key={exam.id} value={exam.id}>
+                      {exam.course_code}: {exam.title}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
           </div>
-          <div className="space-y-0.5">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Target Examination:</span>
-            <select
-              value={selectedExamId}
-              onChange={(e) => setSelectedExamId(e.target.value)}
-              className="block font-bold text-xs bg-slate-50 text-indigo-700 border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-indigo-600"
+
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold text-[11px]">
+              <Layers className="w-3.5 h-3.5" />
+              <span>{commonCount} Common</span>
+            </span>
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-50 text-violet-700 border border-violet-200 font-bold text-[11px]">
+              <Building2 className="w-3.5 h-3.5" />
+              <span>{deptCount} Dept Specific</span>
+            </span>
+            <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-[11px]">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Cloaked in Supabase</span>
+            </span>
+            <button
+              onClick={() => selectedExamId && loadQuestions(selectedExamId)}
+              className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50"
+              title="Refresh questions"
             >
-              {exams.length === 0 ? (
-                <option value="">No exams found — create an exam first</option>
-              ) : (
-                exams.map((exam) => (
-                  <option key={exam.id} value={exam.id}>
-                    {exam.course_code}: {exam.title}
-                  </option>
-                ))
-              )}
-            </select>
+              <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${isLoading ? "animate-spin text-indigo-600" : ""}`} />
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 text-xs text-slate-500">
-          <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-50 border border-slate-200 font-medium">
-            <HelpCircle className="w-3.5 h-3.5 text-indigo-600" />
-            <span>{questions.length} Questions in Bank</span>
-          </span>
-          <span className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Answers Cloaked in Postgres</span>
-          </span>
-          <button
-            onClick={() => selectedExamId && loadQuestions(selectedExamId)}
-            className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50"
-            title="Refresh questions"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${isLoading ? "animate-spin text-indigo-600" : ""}`} />
-          </button>
+        {/* Filter Tabs */}
+        <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => { setScopeFilter("ALL"); setDeptFilter("ALL"); }}
+              className={`px-3 py-1 rounded-lg font-bold transition-colors ${
+                scopeFilter === "ALL" && deptFilter === "ALL"
+                  ? "bg-slate-900 text-white"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              All ({questions.length})
+            </button>
+            <button
+              onClick={() => { setScopeFilter("COMMON"); setDeptFilter("ALL"); }}
+              className={`px-3 py-1 rounded-lg font-bold transition-colors ${
+                scopeFilter === "COMMON"
+                  ? "bg-indigo-600 text-white"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              Part A: Common ({commonCount})
+            </button>
+            <button
+              onClick={() => setScopeFilter("DEPT")}
+              className={`px-3 py-1 rounded-lg font-bold transition-colors ${
+                scopeFilter === "DEPT"
+                  ? "bg-violet-600 text-white"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              Part B: Department Core ({deptCount})
+            </button>
+          </div>
+
+          {scopeFilter === "DEPT" && (
+            <div className="flex items-center gap-2 animate-in fade-in">
+              <span className="text-[11px] font-semibold text-slate-500">Discipline:</span>
+              <select
+                value={deptFilter}
+                onChange={(e) => setDeptFilter(e.target.value)}
+                className="px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-600"
+              >
+                <option value="ALL">All Disciplines</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.code}>
+                    {d.code} - {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 
@@ -166,21 +242,33 @@ function QuestionsBankContent() {
       <div className="space-y-4">
         {isLoading ? (
           <div className="p-12 text-center border border-slate-200 rounded-2xl bg-white text-xs text-slate-400">
-            Loading questions from Supabase...
+            Loading questions from Supabase PostgreSQL...
           </div>
-        ) : questions.length > 0 ? (
-          questions.map((q, idx) => (
+        ) : filteredQuestions.length > 0 ? (
+          filteredQuestions.map((q, idx) => (
             <div
               key={q.id}
               className="p-6 rounded-2xl border border-slate-200/90 bg-white space-y-4 shadow-xs hover:border-indigo-200 hover:shadow-md transition-all"
             >
               {/* Question Header */}
               <div className="flex items-start justify-between gap-4">
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2.5 flex-wrap">
                   <span className="w-7 h-7 rounded-lg bg-slate-100 text-slate-800 text-xs font-mono font-bold flex items-center justify-center border border-slate-200/80">
                     {idx + 1}
                   </span>
-                  <span className="text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+
+                  {/* Scope Badge */}
+                  {q.scope === "COMMON" ? (
+                    <span className="text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                      Part A: Common (All Scholars)
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200">
+                      Part B: {q.department_code || "Dept"} Core
+                    </span>
+                  )}
+
+                  <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
                     {q.question_type}
                   </span>
                 </div>
@@ -198,6 +286,11 @@ function QuestionsBankContent() {
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
+              </div>
+
+              {/* Section display */}
+              <div className="text-[11px] text-slate-500 font-medium italic">
+                {q.section_name}
               </div>
 
               {/* Question Prompt */}
@@ -241,12 +334,12 @@ function QuestionsBankContent() {
           ))
         ) : (
           <div className="p-12 text-center border border-dashed border-slate-200 rounded-2xl bg-white space-y-3">
-            <p className="text-xs text-slate-500">No questions added to this examination yet.</p>
+            <p className="text-xs text-slate-500">No questions found matching your filter.</p>
             <button
               onClick={() => setIsEditorOpen(true)}
               className="text-xs text-indigo-600 font-bold hover:underline"
             >
-              Add the first question to Supabase
+              Add a new question to this examination
             </button>
           </div>
         )}
@@ -256,6 +349,7 @@ function QuestionsBankContent() {
       <QuestionEditorModal
         isOpen={isEditorOpen}
         examId={selectedExamId}
+        departments={departments.map((d) => ({ id: d.id, code: d.code, name: d.name }))}
         onClose={() => setIsEditorOpen(false)}
         onSave={handleSaveQuestion}
       />

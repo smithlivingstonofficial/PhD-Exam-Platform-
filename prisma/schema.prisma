@@ -14,10 +14,36 @@ datasource db {
 
 enum ExamStatus {
   SCHEDULED
+  WAITING_ROOM
   IN_PROGRESS
   SUBMITTED
   TERMINATED
   DISQUALIFIED
+  ABSENT
+  TECHNICAL_FAILURE
+}
+
+enum AttendanceStatus {
+  NOT_REPORTED
+  LOGGED_IN
+  IN_EXAM
+  SUBMITTED
+  ABSENT
+  DISQUALIFIED
+  TECHNICAL_FAILURE
+}
+
+enum SlotStatus {
+  SCHEDULED
+  LOGIN_OPEN
+  IN_PROGRESS
+  CONCLUDED
+  CANCELLED
+}
+
+enum QuestionScope {
+  COMMON
+  DEPARTMENT_SPECIFIC
 }
 
 enum QuestionType {
@@ -35,7 +61,47 @@ enum SeverityLevel {
 }
 
 // ----------------------------------------------------------------------------
-// 1. EXAMS MODEL
+// 1. DEPARTMENTS MODEL
+// ----------------------------------------------------------------------------
+model Department {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String     @unique @db.VarChar(50) // e.g. "CSE", "MECH", "ECE", "MATH", "MGMT"
+  name        String     @db.VarChar(255)
+  description String?    @db.Text
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  students    Student[]
+  questions   Question[]
+
+  @@map("departments")
+}
+
+// ----------------------------------------------------------------------------
+// 2. STUDENTS / RESEARCH SCHOLARS MODEL
+// ----------------------------------------------------------------------------
+model Student {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  regNumber    String        @unique @map("reg_number") @db.VarChar(100) // e.g. "PHD-2026-CSE-001"
+  fullName     String        @map("full_name") @db.VarChar(255)
+  email        String        @unique @db.VarChar(255)
+  phone        String?       @db.VarChar(50)
+  departmentId String        @map("department_id") @db.Uuid
+  accessCode   String        @default("123456") @map("access_code") @db.VarChar(50)
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  department   Department    @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  examSessions ExamSession[]
+
+  @@index([departmentId])
+  @@map("students")
+}
+
+// ----------------------------------------------------------------------------
+// 3. EXAMS MODEL
 // ----------------------------------------------------------------------------
 model Exam {
   id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -56,16 +122,46 @@ model Exam {
   // Relations
   questions        Question[]
   examSessions     ExamSession[]
+  slots            ExamSlot[]
 
   @@map("exams")
 }
 
 // ----------------------------------------------------------------------------
-// 2. QUESTIONS MODEL
+// 4. EXAM SLOTS MODEL (Multi-Slot, Re-Exam, and Window Timing Controls)
+// ----------------------------------------------------------------------------
+model ExamSlot {
+  id                 String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  examId             String        @map("exam_id") @db.Uuid
+  slotNumber         Int           @default(1) @map("slot_number") // 1 = Main Slot, 2 = Second Slot (Re-Exam)
+  slotName           String        @map("slot_name") @db.VarChar(100) // e.g. "Slot 1 - Morning Session"
+  loginOpensAt       DateTime      @map("login_opens_at") @db.Timestamptz(6) // Check-in & verification window
+  startTime          DateTime      @map("start_time") @db.Timestamptz(6) // Questions unlock
+  joinWindowClosesAt DateTime      @map("join_window_closes_at") @db.Timestamptz(6) // Late join cutoff
+  endTime            DateTime      @map("end_time") @db.Timestamptz(6) // Hard stop
+  status             SlotStatus    @default(SCHEDULED)
+  isRetestSlot       Boolean       @default(false) @map("is_retest_slot")
+  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  exam               Exam          @relation(fields: [examId], references: [id], onDelete: Cascade)
+  examSessions       ExamSession[]
+
+  @@unique([examId, slotNumber])
+  @@index([examId, status])
+  @@map("exam_slots")
+}
+
+// ----------------------------------------------------------------------------
+// 5. QUESTIONS MODEL (Dual-Tier: Common vs Department-Specific)
 // ----------------------------------------------------------------------------
 model Question {
   id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   examId         String         @map("exam_id") @db.Uuid
+  scope          QuestionScope  @default(COMMON) // COMMON = all departments; DEPARTMENT_SPECIFIC = dept only
+  departmentId   String?        @map("department_id") @db.Uuid // null if COMMON
+  sectionName    String?        @default("Part A: General & Research Aptitude") @map("section_name") @db.VarChar(150)
   questionText   String         @map("question_text") @db.Text
   questionType   QuestionType   @map("question_type")
   options        Json           @default("[]") // Array of [{ id: "a", text: "Option A" }]
@@ -79,41 +175,55 @@ model Question {
 
   // Relations
   exam           Exam           @relation(fields: [examId], references: [id], onDelete: Cascade)
+  department     Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   sessionAnswers SessionAnswer[]
 
   @@index([examId, orderIndex])
+  @@index([examId, scope, departmentId])
   @@map("questions")
 }
 
 // ----------------------------------------------------------------------------
-// 3. EXAM SESSIONS MODEL (Candidate Enrollment & Progress)
+// 6. EXAM SESSIONS MODEL (Candidate Enrollment, Attendance & Progress)
 // ----------------------------------------------------------------------------
 model ExamSession {
-  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  examId         String         @map("exam_id") @db.Uuid
-  studentId      String         @map("student_id") @db.Uuid
-  status         ExamStatus     @default(SCHEDULED)
-  startedAt      DateTime?      @map("started_at") @db.Timestamptz(6)
-  expiresAt      DateTime?      @map("expires_at") @db.Timestamptz(6)
-  submittedAt    DateTime?      @map("submitted_at") @db.Timestamptz(6)
-  finalScore     Decimal?       @map("final_score") @db.Decimal(6, 2)
-  violationCount Int            @default(0) @map("violation_count")
-  integrityScore Int            @default(100) @map("integrity_score")
-  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                 String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  examId             String           @map("exam_id") @db.Uuid
+  slotId             String?          @map("slot_id") @db.Uuid
+  studentId          String           @map("student_id") @db.Uuid
+  status             ExamStatus       @default(SCHEDULED)
+  attendanceStatus   AttendanceStatus @default(NOT_REPORTED) @map("attendance_status")
+  loginAt            DateTime?        @map("login_at") @db.Timestamptz(6)
+  startedAt          DateTime?        @map("started_at") @db.Timestamptz(6)
+  expiresAt          DateTime?        @map("expires_at") @db.Timestamptz(6)
+  submittedAt        DateTime?        @map("submitted_at") @db.Timestamptz(6)
+  finalScore         Decimal?         @map("final_score") @db.Decimal(6, 2)
+  commonScore        Decimal?         @map("common_score") @db.Decimal(6, 2)
+  departmentScore    Decimal?         @map("department_score") @db.Decimal(6, 2)
+  isPassed           Boolean?         @map("is_passed")
+  violationCount     Int              @default(0) @map("violation_count")
+  integrityScore     Int              @default(100) @map("integrity_score")
+  attemptNumber      Int              @default(1) @map("attempt_number") // 1 = Slot 1, 2 = Slot 2
+  isEligibleForRetest Boolean         @default(false) @map("is_eligible_for_retest")
+  retestSlotId       String?          @map("retest_slot_id") @db.Uuid
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   // Relations
-  exam           Exam           @relation(fields: [examId], references: [id], onDelete: Cascade)
-  answers        SessionAnswer[]
-  auditLogs      ExamAuditLog[]
+  exam               Exam             @relation(fields: [examId], references: [id], onDelete: Cascade)
+  slot               ExamSlot?        @relation(fields: [slotId], references: [id], onDelete: SetNull)
+  student            Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  answers            SessionAnswer[]
+  auditLogs          ExamAuditLog[]
 
-  @@unique([examId, studentId])
+  @@unique([examId, studentId, attemptNumber])
   @@index([studentId, examId])
+  @@index([slotId])
   @@map("exam_sessions")
 }
 
 // ----------------------------------------------------------------------------
-// 4. SESSION ANSWERS MODEL
+// 7. SESSION ANSWERS MODEL
 // ----------------------------------------------------------------------------
 model SessionAnswer {
   id                String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -134,7 +244,7 @@ model SessionAnswer {
 }
 
 // ----------------------------------------------------------------------------
-// 5. EXAM AUDIT & INCIDENT LOGS MODEL
+// 8. EXAM AUDIT & INCIDENT LOGS MODEL
 // ----------------------------------------------------------------------------
 model ExamAuditLog {
   id                 String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid

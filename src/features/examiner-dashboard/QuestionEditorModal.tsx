@@ -1,15 +1,25 @@
 "use client";
 
 import { useState } from "react";
-import { QuestionType } from "@/types";
-import { X, Plus, Trash2, CheckCircle2, AlertCircle } from "lucide-react";
+import { QuestionType, QuestionScope } from "@/types";
+import { X, Plus, Trash2, CheckCircle2, AlertCircle, Layers, Building2 } from "lucide-react";
+
+interface DepartmentOption {
+  id: string;
+  code: string;
+  name: string;
+}
 
 interface QuestionEditorModalProps {
   isOpen: boolean;
   examId: string;
+  departments?: DepartmentOption[];
   onClose: () => void;
   onSave: (question: {
     exam_id: string;
+    scope?: QuestionScope;
+    department_id?: string | null;
+    section_name?: string;
     question_text: string;
     question_type: QuestionType;
     options: { id: string; text: string }[];
@@ -19,7 +29,16 @@ interface QuestionEditorModalProps {
   }) => void;
 }
 
-export function QuestionEditorModal({ isOpen, examId, onClose, onSave }: QuestionEditorModalProps) {
+export function QuestionEditorModal({ 
+  isOpen, 
+  examId, 
+  departments = [], 
+  onClose, 
+  onSave 
+}: QuestionEditorModalProps) {
+  const [scope, setScope] = useState<QuestionScope>("COMMON");
+  const [departmentId, setDepartmentId] = useState<string>(departments[0]?.id || "");
+  const [sectionName, setSectionName] = useState<string>("Part A: General & Research Aptitude");
   const [questionText, setQuestionText] = useState("");
   const [questionType, setQuestionType] = useState<QuestionType>("MCQ");
   const [options, setOptions] = useState([
@@ -29,10 +48,28 @@ export function QuestionEditorModal({ isOpen, examId, onClose, onSave }: Questio
     { id: "d", text: "" },
   ]);
   const [correctAnswers, setCorrectAnswers] = useState<string[]>(["a"]);
-  const [marks, setMarks] = useState(2);
-  const [negativeMarks, setNegativeMarks] = useState(0.5);
+  const [marks, setMarks] = useState(4);
+  const [negativeMarks, setNegativeMarks] = useState(1);
 
   if (!isOpen) return null;
+
+  const handleScopeChange = (newScope: QuestionScope) => {
+    setScope(newScope);
+    if (newScope === "COMMON") {
+      setSectionName("Part A: General & Research Aptitude (Common to All)");
+    } else {
+      const dept = departments.find((d) => d.id === departmentId);
+      setSectionName(`Part B: ${dept ? dept.name : "Department Specialization"} Core`);
+    }
+  };
+
+  const handleDeptChange = (newDeptId: string) => {
+    setDepartmentId(newDeptId);
+    const dept = departments.find((d) => d.id === newDeptId);
+    if (dept) {
+      setSectionName(`Part B: ${dept.name} Core`);
+    }
+  };
 
   const handleToggleCorrect = (optionId: string) => {
     if (questionType === "MCQ") {
@@ -65,6 +102,9 @@ export function QuestionEditorModal({ isOpen, examId, onClose, onSave }: Questio
 
     onSave({
       exam_id: examId,
+      scope,
+      department_id: scope === "COMMON" ? null : departmentId || null,
+      section_name: sectionName,
       question_text: questionText,
       question_type: questionType,
       options: options.filter((opt) => opt.text.trim().length > 0),
@@ -82,8 +122,8 @@ export function QuestionEditorModal({ isOpen, examId, onClose, onSave }: Questio
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
           <div>
-            <h2 className="text-base font-bold text-slate-900">Add Question to Exam</h2>
-            <p className="text-xs text-slate-500">Configure question prompt, choice options, and correct grading answer</p>
+            <h2 className="text-base font-bold text-slate-900">Add Question to Examination Bank</h2>
+            <p className="text-xs text-slate-500">Configure question scope, department syllabus, marking rubric, and server answer key</p>
           </div>
           <button onClick={onClose} className="p-1 rounded text-slate-400 hover:text-slate-700">
             <X className="w-5 h-5" />
@@ -92,13 +132,82 @@ export function QuestionEditorModal({ isOpen, examId, onClose, onSave }: Questio
 
         {/* Body */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-5 flex-1 text-xs">
+          {/* Scope Selector: Common vs Department */}
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+            <label className="text-slate-700 font-bold block uppercase tracking-wider text-[11px]">
+              Question Syllabus Scope & Assignment
+            </label>
+
+            <div className="grid grid-cols-2 gap-3">
+              <label 
+                onClick={() => handleScopeChange("COMMON")}
+                className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-2.5 ${
+                  scope === "COMMON"
+                    ? "bg-indigo-50/80 border-indigo-300 text-indigo-950 shadow-2xs"
+                    : "bg-white border-slate-200 text-slate-700 hover:border-slate-300"
+                }`}
+              >
+                <Layers className={`w-4 h-4 mt-0.5 ${scope === "COMMON" ? "text-indigo-600" : "text-slate-400"}`} />
+                <div>
+                  <span className="font-bold block">Part A: Common Question</span>
+                  <span className="text-[11px] text-slate-500 block mt-0.5">Appears for ALL departments (Research Aptitude, Logic)</span>
+                </div>
+              </label>
+
+              <label 
+                onClick={() => handleScopeChange("DEPARTMENT_SPECIFIC")}
+                className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-2.5 ${
+                  scope === "DEPARTMENT_SPECIFIC"
+                    ? "bg-indigo-50/80 border-indigo-300 text-indigo-950 shadow-2xs"
+                    : "bg-white border-slate-200 text-slate-700 hover:border-slate-300"
+                }`}
+              >
+                <Building2 className={`w-4 h-4 mt-0.5 ${scope === "DEPARTMENT_SPECIFIC" ? "text-indigo-600" : "text-slate-400"}`} />
+                <div>
+                  <span className="font-bold block">Part B: Department Specific</span>
+                  <span className="text-[11px] text-slate-500 block mt-0.5">Appears ONLY for candidates of a chosen discipline</span>
+                </div>
+              </label>
+            </div>
+
+            {/* Department Picker if Department Specific */}
+            {scope === "DEPARTMENT_SPECIFIC" && (
+              <div className="pt-2 border-t border-slate-200 grid grid-cols-2 gap-3 animate-in fade-in">
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">Target Discipline *</label>
+                  <select
+                    value={departmentId}
+                    onChange={(e) => handleDeptChange(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-lg bg-white border border-slate-200 font-bold text-indigo-700 text-xs focus:outline-none focus:border-indigo-600"
+                  >
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.code} - {d.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1">Section Display Name</label>
+                  <input
+                    type="text"
+                    value={sectionName}
+                    onChange={(e) => setSectionName(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-800 text-xs focus:outline-none focus:border-indigo-600"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Question Text */}
           <div>
-            <label className="block text-slate-700 font-semibold mb-1">Question Prompt *</label>
+            <label className="block text-slate-700 font-semibold mb-1">Question Text / Statement *</label>
             <textarea
               required
               rows={3}
-              placeholder="e.g. Explain the difference between Type I and Type II errors in hypothesis testing..."
+              placeholder="e.g. State the Null Hypothesis and describe how significance level alpha impacts the decision rule..."
               value={questionText}
               onChange={(e) => setQuestionText(e.target.value)}
               className="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:bg-white resize-none"
@@ -116,7 +225,7 @@ export function QuestionEditorModal({ isOpen, examId, onClose, onSave }: Questio
               >
                 <option value="MCQ">Single Choice (MCQ)</option>
                 <option value="MULTI_SELECT">Multiple Select</option>
-                <option value="TEXT">Descriptive / Text</option>
+                <option value="TEXT">Descriptive / Essay</option>
               </select>
             </div>
             <div>
@@ -148,7 +257,7 @@ export function QuestionEditorModal({ isOpen, examId, onClose, onSave }: Questio
             <div className="space-y-3 pt-2">
               <div className="flex items-center justify-between">
                 <label className="text-slate-700 font-semibold">Answer Choices & Correct Key *</label>
-                <span className="text-[11px] text-slate-500">Click letter circle to mark correct answer</span>
+                <span className="text-[11px] text-slate-500">Click letter circle to toggle correct key</span>
               </div>
 
               <div className="space-y-2">
@@ -212,11 +321,11 @@ export function QuestionEditorModal({ isOpen, examId, onClose, onSave }: Questio
             </div>
           )}
 
-          {/* Security Alert Note */}
+          {/* Security Alert */}
           <div className="p-3.5 rounded-xl bg-indigo-50 border border-indigo-200 flex items-start gap-2.5 text-indigo-950 text-xs">
             <AlertCircle className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
             <span>
-              <strong>Server Answer Cloaking:</strong> The correct answers configured here are stored exclusively in Supabase PostgreSQL and are <strong>never sent across the network to student clients</strong>.
+              <strong>Cloaked Integrity:</strong> Correct answers are stored securely in Supabase PostgreSQL and are <strong>strictly filtered out</strong> from candidate network responses.
             </span>
           </div>
 

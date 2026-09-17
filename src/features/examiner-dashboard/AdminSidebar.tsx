@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
@@ -7,7 +9,11 @@ import {
   ShieldAlert, 
   Users, 
   Settings,
-  GraduationCap
+  GraduationCap,
+  Building2,
+  UserCheck,
+  Award,
+  RefreshCw
 } from "lucide-react";
 
 export function AdminSidebar() {
@@ -15,15 +21,19 @@ export function AdminSidebar() {
 
   const navItems = [
     { label: "Dashboard Overview", href: "/admin", icon: LayoutDashboard },
-    { label: "Exam Management", href: "/admin/exams", icon: BookOpenCheck },
-    { label: "Question Bank", href: "/admin/questions", icon: HelpCircle },
-    { label: "Live Proctor Monitor", href: "/admin/proctor", icon: ShieldAlert },
+    { label: "Academic Departments", href: "/admin/departments", icon: Building2 },
     { label: "Candidate Registry", href: "/admin/candidates", icon: Users },
+    { label: "Exam & Timing Slots", href: "/admin/exams", icon: BookOpenCheck },
+    { label: "Question Bank (Dual)", href: "/admin/questions", icon: HelpCircle },
+    { label: "Attendance Monitor", href: "/admin/attendance", icon: UserCheck },
+    { label: "Results & Evaluation", href: "/admin/results", icon: Award },
+    { label: "Second Slot Re-Exam", href: "/admin/second-slot", icon: RefreshCw },
+    { label: "Live Proctor Monitor", href: "/admin/proctor", icon: ShieldAlert },
   ];
 
   return (
     <aside className="w-64 border-r border-slate-200 bg-white flex flex-col justify-between shrink-0 h-screen sticky top-0 shadow-xs z-20">
-      <div className="p-5 space-y-6">
+      <div className="p-5 space-y-6 overflow-y-auto">
         {/* Portal Branding */}
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-md shadow-indigo-600/20">
