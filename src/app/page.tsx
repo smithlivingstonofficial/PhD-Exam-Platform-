@@ -132,7 +132,7 @@ export default function Home() {
         <footer className="py-4 text-center text-xs text-slate-400 border-t border-slate-200 bg-white">
           <div className="flex items-center justify-center gap-2">
             <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-            <span>Dual-Tier Paper Delivery • Edge-AI MediaPipe Vision & Silero VAD • Supabase PostgreSQL</span>
+            <span>Secure Two-Part Examination Delivery • Automated AI Audio & Visual Proctoring • University Assessment Network</span>
           </div>
         </footer>
       )}

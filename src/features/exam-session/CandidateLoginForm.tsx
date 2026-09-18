@@ -146,7 +146,7 @@ export function CandidateLoginForm({ onLoginSuccess }: CandidateLoginFormProps) 
       {/* Security Notice */}
       <div className="text-center text-[11px] text-slate-400 flex items-center justify-center gap-1.5">
         <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-        <span>Edge-AI Continuous Visual & Audio Proctoring Enforced</span>
+        <span>Automated Continuous Audio & Visual Proctoring Enforced</span>
       </div>
     </div>
   );
