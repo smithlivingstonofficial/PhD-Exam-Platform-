@@ -5,9 +5,15 @@ import {
   getAdminOverviewData, 
   createExamAction, 
   toggleExamPublishAction, 
+  deleteExamAction,
   SerializedExam 
 } from "@/app/admin/actions";
-import { ExamCard, CreateExamModal } from "@/features/examiner-dashboard";
+import { 
+  ExamCard, 
+  CreateExamModal, 
+  EditExamModal, 
+  SlotManagerModal 
+} from "@/features/examiner-dashboard";
 import { Plus, Search, RefreshCw } from "lucide-react";
 
 export default function ExamsManagementPage() {
@@ -16,6 +22,8 @@ export default function ExamsManagementPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterTab, setFilterTab] = useState<"ALL" | "PUBLISHED" | "DRAFT">("ALL");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [editingExam, setEditingExam] = useState<SerializedExam | null>(null);
+  const [managingSlotsExam, setManagingSlotsExam] = useState<SerializedExam | null>(null);
 
   useEffect(() => {
     let ignore = false;
@@ -49,6 +57,19 @@ export default function ExamsManagementPage() {
     await loadExams();
   };
 
+  const handleDeleteExam = async (id: string, title: string) => {
+    if (confirm(`Are you sure you want to delete the examination "${title}"? All associated slots and questions will be removed.`)) {
+      setIsLoading(true);
+      const res = await deleteExamAction(id);
+      if (res.success) {
+        await loadExams();
+      } else {
+        alert(res.error || "Failed to delete examination");
+        setIsLoading(false);
+      }
+    }
+  };
+
   const filteredExams = exams.filter((exam) => {
     const matchesSearch =
       exam.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -64,13 +85,13 @@ export default function ExamsManagementPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Examinations Manager</h1>
-          <p className="text-xs text-slate-500">Create, schedule, and configure anti-cheat policies for coursework assessments</p>
+          <p className="text-xs text-slate-500">Create, schedule, and configure proctoring guidelines for coursework assessments</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={loadExams}
             className="p-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs transition-colors shadow-2xs"
-            title="Refresh database data"
+            title="Refresh examination list"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin text-indigo-600" : ""}`} />
           </button>
@@ -117,7 +138,7 @@ export default function ExamsManagementPage() {
       {/* Grid of Exams */}
       {isLoading ? (
         <div className="p-12 text-center border border-slate-200 rounded-2xl bg-white text-xs text-slate-400">
-          Loading examinations from Supabase PostgreSQL...
+          Loading examinations...
         </div>
       ) : filteredExams.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -126,6 +147,9 @@ export default function ExamsManagementPage() {
               key={exam.id}
               exam={exam}
               onTogglePublish={handleTogglePublish}
+              onEdit={(e) => setEditingExam(e)}
+              onManageSlots={(e) => setManagingSlotsExam(e)}
+              onDelete={handleDeleteExam}
             />
           ))}
         </div>
@@ -141,12 +165,27 @@ export default function ExamsManagementPage() {
         </div>
       )}
 
-      {/* Modal */}
+      {/* Modals */}
       <CreateExamModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onCreate={handleCreateExam}
       />
+
+      <EditExamModal
+        isOpen={!!editingExam}
+        exam={editingExam}
+        onClose={() => setEditingExam(null)}
+        onSave={loadExams}
+      />
+
+      <SlotManagerModal
+        isOpen={!!managingSlotsExam}
+        exam={managingSlotsExam}
+        onClose={() => setManagingSlotsExam(null)}
+        onUpdate={loadExams}
+      />
     </div>
   );
 }
+

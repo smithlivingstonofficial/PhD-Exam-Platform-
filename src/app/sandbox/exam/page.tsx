@@ -26,10 +26,8 @@ export default function ExamSandboxPage() {
     if (data.stage === "ALREADY_SUBMITTED") {
       setStage("COMPLETED");
     } else if (data.stage === "ACTIVE_EXAM" && data.startedAt) {
-      // Resume active exam immediately
       setStage("ACTIVE_EXAM");
     } else {
-      // Waiting room (handles countdown or unlock)
       setStage("WAITING_ROOM");
     }
   };
@@ -49,10 +47,30 @@ export default function ExamSandboxPage() {
     setStage("LOGIN");
   };
 
+  // Dedicated 100vh Workstation during Waiting Room & Active Exam
+  if (stage === "WAITING_ROOM" && payload) {
+    return (
+      <WaitingRoomView
+        payload={payload}
+        onStartExam={handleStartExam}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  if (stage === "ACTIVE_EXAM" && payload) {
+    return (
+      <ExamViewport
+        payload={payload}
+        onExamSubmitted={handleExamSubmitted}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
       {/* Sandbox Header Bar */}
-      <nav className="bg-white border-b border-slate-200 px-4 py-2.5 flex items-center justify-between text-xs">
+      <nav className="bg-white border-b border-slate-200 px-4 py-2.5 flex items-center justify-between text-xs shadow-xs">
         <div className="flex items-center gap-3">
           <Link
             href="/admin"
@@ -93,15 +111,6 @@ export default function ExamSandboxPage() {
             onStartExam={handleStartExam}
             onLogout={handleLogout}
           />
-        )}
-
-        {stage === "ACTIVE_EXAM" && payload && (
-          <div className="-m-4 sm:-m-6 md:-m-8">
-            <ExamViewport
-              payload={payload}
-              onExamSubmitted={handleExamSubmitted}
-            />
-          </div>
         )}
 
         {stage === "COMPLETED" && payload && (

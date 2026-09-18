@@ -407,7 +407,47 @@ export async function recordCandidateViolationAction(data: {
 }
 
 // ----------------------------------------------------------------------------
-// 6. ATOMIC EXAM SUBMISSION & SERVER-SIDE GRADING
+// 6. ATOMIC DISQUALIFICATION LOCKOUT
+// ----------------------------------------------------------------------------
+
+export async function disqualifyCandidateAction(data: {
+  sessionId: string;
+  reason: string;
+  evidenceSnapshotUrl?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    await prisma.examAuditLog.create({
+      data: {
+        sessionId: data.sessionId,
+        eventType: "SESSION_DISQUALIFIED",
+        severity: "CRITICAL",
+        details: {
+          reason: data.reason,
+          disqualifiedAt: new Date().toISOString(),
+        } as unknown as Prisma.InputJsonValue,
+        evidenceSnapshotUrl: data.evidenceSnapshotUrl || null,
+      },
+    });
+
+    await prisma.examSession.update({
+      where: { id: data.sessionId },
+      data: {
+        status: "DISQUALIFIED",
+        attendanceStatus: "DISQUALIFIED",
+        submittedAt: new Date(),
+        integrityScore: 0,
+      },
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error disqualifying candidate:", error);
+    return { success: false, error: String(error) };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// 7. ATOMIC EXAM SUBMISSION & SERVER-SIDE GRADING
 // ----------------------------------------------------------------------------
 
 export async function submitCandidateExamAction(sessionId: string): Promise<{

@@ -136,6 +136,33 @@ export interface AntiCheatConfigInput {
   [key: string]: unknown;
 }
 
+export interface SerializedAuditLog {
+  id: string;
+  session_id: string;
+  event_type: string;
+  severity: string;
+  timestamp: string;
+  evidence_snapshot_url: string | null;
+  evidence_audio_url: string | null;
+  details: Record<string, unknown>;
+}
+
+export interface CandidateResponseDetail {
+  questionId: string;
+  questionText: string;
+  sectionName: string;
+  scope: string;
+  questionType: string;
+  marks: number;
+  negativeMarks: number;
+  options: { id: string; text: string }[];
+  correctAnswers: string[];
+  selectedOptions: string[];
+  textResponse: string | null;
+  isCorrect: boolean;
+  scoreEarned: number;
+}
+
 // ----------------------------------------------------------------------------
 // 1. DEPARTMENT ACTIONS
 // ----------------------------------------------------------------------------
@@ -200,6 +227,81 @@ export async function deleteDepartmentAction(id: string): Promise<{ success: boo
   } catch (error) {
     console.error("Error deleting department:", error);
     return { success: false, error: String(error) };
+  }
+}
+
+export async function updateDepartmentAction(
+  id: string,
+  data: { code: string; name: string; description?: string }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await prisma.department.update({
+      where: { id },
+      data: {
+        code: data.code.toUpperCase().trim(),
+        name: data.name.trim(),
+        description: data.description?.trim() || null,
+      },
+    });
+
+    revalidatePath("/admin");
+    revalidatePath("/admin/departments");
+    revalidatePath("/admin/questions");
+    revalidatePath("/admin/candidates");
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating department:", error);
+    return { success: false, error: String(error) };
+  }
+}
+
+export async function getDepartmentDetailsAction(id: string) {
+  try {
+    const dept = await prisma.department.findUnique({
+      where: { id },
+      include: {
+        students: {
+          orderBy: { regNumber: "asc" },
+        },
+        questions: {
+          include: { exam: { select: { title: true, courseCode: true } } },
+          orderBy: { createdAt: "desc" },
+        },
+      },
+    });
+
+    if (!dept) return { success: false, error: "Department not found", department: null };
+
+    return {
+      success: true,
+      department: {
+        id: dept.id,
+        code: dept.code,
+        name: dept.name,
+        description: dept.description || "",
+        students: dept.students.map((s) => ({
+          id: s.id,
+          reg_number: s.regNumber,
+          full_name: s.fullName,
+          email: s.email,
+          phone: s.phone || "",
+          access_code: s.accessCode,
+          created_at: s.createdAt.toISOString(),
+        })),
+        questions: dept.questions.map((q) => ({
+          id: q.id,
+          exam_title: q.exam.title,
+          course_code: q.exam.courseCode,
+          section_name: q.sectionName,
+          question_text: q.questionText,
+          marks: Number(q.marks),
+          question_type: q.questionType,
+        })),
+      },
+    };
+  } catch (error) {
+    console.error("Error fetching department details:", error);
+    return { success: false, error: String(error), department: null };
   }
 }
 
@@ -268,6 +370,217 @@ export async function createStudentAction(data: {
   }
 }
 
+export async function updateStudentAction(
+  id: string,
+  data: {
+    full_name: string;
+    email: string;
+    department_id: string;
+    phone?: string;
+    access_code?: string;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    await prisma.student.update({
+      where: { id },
+      data: {
+        fullName: data.full_name.trim(),
+        email: data.email.toLowerCase().trim(),
+        departmentId: data.department_id,
+        phone: data.phone?.trim() || null,
+        ...(data.access_code ? { accessCode: data.access_code.trim() } : {}),
+      },
+    });
+
+    revalidatePath("/admin");
+    revalidatePath("/admin/candidates");
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating student:", error);
+    return { success: false, error: String(error) };
+  }
+}
+
+export async function deleteStudentAction(id: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    await prisma.student.delete({ where: { id } });
+    revalidatePath("/admin");
+    revalidatePath("/admin/candidates");
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting student:", error);
+    return { success: false, error: String(error) };
+  }
+}
+
+export async function bulkImportStudentsAction(
+  students: Array<{
+    reg_number: string;
+    full_name: string;
+    email: string;
+    department_code: string;
+    phone?: string;
+  }>
+): Promise<{
+  success: boolean;
+  insertedCount: number;
+  duplicateCount: number;
+  errors: string[];
+}> {
+  try {
+    const departments = await prisma.department.findMany();
+    const deptMap: Record<string, string> = {};
+    for (const d of departments) {
+      deptMap[d.code.toUpperCase()] = d.id;
+    }
+
+    let insertedCount = 0;
+    let duplicateCount = 0;
+    const errors: string[] = [];
+
+    for (const s of students) {
+      const reg = s.reg_number.toUpperCase().trim();
+      const email = s.email.toLowerCase().trim();
+      const deptCode = s.department_code.toUpperCase().trim();
+
+      if (!deptMap[deptCode]) {
+        errors.push(`Row with Reg ${reg}: Unknown department code "${deptCode}"`);
+        continue;
+      }
+
+      const existing = await prisma.student.findFirst({
+        where: {
+          OR: [{ regNumber: reg }, { email: email }],
+        },
+      });
+
+      if (existing) {
+        duplicateCount++;
+        continue;
+      }
+
+      await prisma.student.create({
+        data: {
+          regNumber: reg,
+          fullName: s.full_name.trim(),
+          email: email,
+          departmentId: deptMap[deptCode],
+          phone: s.phone?.trim() || null,
+          accessCode: Math.floor(100000 + Math.random() * 900000).toString(),
+        },
+      });
+      insertedCount++;
+    }
+
+    revalidatePath("/admin");
+    revalidatePath("/admin/candidates");
+    return { success: true, insertedCount, duplicateCount, errors };
+  } catch (error) {
+    console.error("Error bulk importing students:", error);
+    return { success: false, insertedCount: 0, duplicateCount: 0, errors: [String(error)] };
+  }
+}
+
+export async function enrollStudentInExamAction(
+  studentId: string,
+  examId: string,
+  slotId?: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Check if student is already enrolled in this exam attempt 1
+    const existing = await prisma.examSession.findFirst({
+      where: { studentId, examId, attemptNumber: 1 },
+    });
+
+    if (existing) {
+      return { success: false, error: "Scholar is already enrolled in this exam." };
+    }
+
+    let targetSlotId = slotId;
+    if (!targetSlotId) {
+      const primarySlot = await prisma.examSlot.findFirst({
+        where: { examId, slotNumber: 1 },
+      });
+      targetSlotId = primarySlot?.id;
+    }
+
+    await prisma.examSession.create({
+      data: {
+        examId,
+        slotId: targetSlotId || null,
+        studentId,
+        status: "SCHEDULED",
+        attendanceStatus: "NOT_REPORTED",
+        attemptNumber: 1,
+        integrityScore: 100,
+        violationCount: 0,
+      },
+    });
+
+    revalidatePath("/admin");
+    revalidatePath("/admin/candidates");
+    revalidatePath("/admin/attendance");
+    revalidatePath("/admin/exams");
+    return { success: true };
+  } catch (error) {
+    console.error("Error enrolling student:", error);
+    return { success: false, error: String(error) };
+  }
+}
+
+export async function getStudentProfileHistoryAction(studentId: string) {
+  try {
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      include: {
+        department: true,
+        examSessions: {
+          include: {
+            exam: { select: { title: true, courseCode: true, passingMarks: true, totalMarks: true } },
+            slot: { select: { slotName: true, slotNumber: true, startTime: true } },
+          },
+          orderBy: { createdAt: "desc" },
+        },
+      },
+    });
+
+    if (!student) return { success: false, error: "Scholar not found", student: null };
+
+    return {
+      success: true,
+      student: {
+        id: student.id,
+        reg_number: student.regNumber,
+        full_name: student.fullName,
+        email: student.email,
+        phone: student.phone || "",
+        department_code: student.department.code,
+        department_name: student.department.name,
+        access_code: student.accessCode,
+        created_at: student.createdAt.toISOString(),
+        sessions: student.examSessions.map((es) => ({
+          sessionId: es.id,
+          examTitle: es.exam.title,
+          courseCode: es.exam.courseCode,
+          slotName: es.slot?.slotName || "Main Session",
+          attemptNumber: es.attemptNumber,
+          status: es.status,
+          attendanceStatus: es.attendanceStatus,
+          finalScore: es.finalScore !== null ? Number(es.finalScore) : null,
+          isPassed: es.isPassed,
+          integrityScore: es.integrityScore,
+          violationCount: es.violationCount,
+          loginAt: es.loginAt ? es.loginAt.toISOString() : null,
+          submittedAt: es.submittedAt ? es.submittedAt.toISOString() : null,
+        })),
+      },
+    };
+  } catch (error) {
+    console.error("Error fetching scholar history:", error);
+    return { success: false, error: String(error), student: null };
+  }
+}
+
 // ----------------------------------------------------------------------------
 // 3. EXAM & SLOTS ACTIONS (WITH TIMING WINDOW CONTROLS)
 // ----------------------------------------------------------------------------
@@ -277,39 +590,40 @@ export async function getAdminOverviewData(): Promise<{
   candidates: SerializedCandidate[];
 }> {
   try {
-    const exams = await prisma.exam.findMany({
-      include: {
-        slots: {
-          orderBy: { slotNumber: "asc" },
-          include: {
-            _count: {
-              select: { examSessions: true },
+    const [exams, sessions] = await Promise.all([
+      prisma.exam.findMany({
+        include: {
+          slots: {
+            orderBy: { slotNumber: "asc" },
+            include: {
+              _count: {
+                select: { examSessions: true },
+              },
             },
           },
+          _count: {
+            select: { questions: true, examSessions: true },
+          },
         },
-        _count: {
-          select: { questions: true, examSessions: true },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.examSession.findMany({
+        include: {
+          exam: {
+            select: { title: true, courseCode: true },
+          },
+          slot: true,
+          student: {
+            include: { department: true },
+          },
+          auditLogs: {
+            take: 1,
+            orderBy: { timestamp: "desc" },
+          },
         },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-
-    const sessions = await prisma.examSession.findMany({
-      include: {
-        exam: {
-          select: { title: true, courseCode: true },
-        },
-        slot: true,
-        student: {
-          include: { department: true },
-        },
-        auditLogs: {
-          take: 1,
-          orderBy: { timestamp: "desc" },
-        },
-      },
-      orderBy: { updatedAt: "desc" },
-    });
+        orderBy: { updatedAt: "desc" },
+      }),
+    ]);
 
     const serializedExams: SerializedExam[] = exams.map((e) => {
       const antiCheat = typeof e.antiCheatConfig === "object" && e.antiCheatConfig !== null
@@ -477,6 +791,168 @@ export async function toggleExamPublishAction(id: string, isPublished: boolean) 
   }
 }
 
+export async function updateExamAction(
+  id: string,
+  data: {
+    title: string;
+    course_code: string;
+    description: string;
+    duration_minutes: number;
+    total_marks: number;
+    passing_marks: number;
+    start_time?: string;
+    end_time?: string;
+    anti_cheat_config: AntiCheatConfigInput;
+  }
+) {
+  try {
+    await prisma.exam.update({
+      where: { id },
+      data: {
+        title: data.title,
+        courseCode: data.course_code.toUpperCase().trim(),
+        description: data.description,
+        durationMinutes: data.duration_minutes,
+        totalMarks: data.total_marks,
+        passingMarks: data.passing_marks,
+        ...(data.start_time ? { startTime: new Date(data.start_time) } : {}),
+        ...(data.end_time ? { endTime: new Date(data.end_time) } : {}),
+        antiCheatConfig: data.anti_cheat_config as object,
+      },
+    });
+
+    revalidatePath("/admin");
+    revalidatePath("/admin/exams");
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating exam:", error);
+    return { success: false, error: String(error) };
+  }
+}
+
+export async function deleteExamAction(id: string) {
+  try {
+    await prisma.exam.delete({ where: { id } });
+    revalidatePath("/admin");
+    revalidatePath("/admin/exams");
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting exam:", error);
+    return { success: false, error: String(error) };
+  }
+}
+
+export async function getExamSlotsAction(examId: string): Promise<SerializedSlot[]> {
+  try {
+    const slots = await prisma.examSlot.findMany({
+      where: { examId },
+      include: {
+        _count: {
+          select: { examSessions: true },
+        },
+      },
+      orderBy: { slotNumber: "asc" },
+    });
+
+    return slots.map((s) => ({
+      id: s.id,
+      exam_id: s.examId,
+      slot_number: s.slotNumber,
+      slot_name: s.slotName,
+      login_opens_at: s.loginOpensAt.toISOString(),
+      start_time: s.startTime.toISOString(),
+      join_window_closes_at: s.joinWindowClosesAt.toISOString(),
+      end_time: s.endTime.toISOString(),
+      status: s.status as SlotStatus,
+      is_retest_slot: s.isRetestSlot,
+      enrolled_count: s._count.examSessions,
+      attended_count: 0,
+    }));
+  } catch (error) {
+    console.error("Error getting exam slots:", error);
+    return [];
+  }
+}
+
+export async function createExamSlotAction(data: {
+  exam_id: string;
+  slot_name: string;
+  login_opens_at: string;
+  start_time: string;
+  join_window_closes_at: string;
+  end_time: string;
+  is_retest_slot?: boolean;
+}) {
+  try {
+    const count = await prisma.examSlot.count({ where: { examId: data.exam_id } });
+    const slotNumber = count + 1;
+
+    const slot = await prisma.examSlot.create({
+      data: {
+        examId: data.exam_id,
+        slotNumber,
+        slotName: data.slot_name.trim(),
+        loginOpensAt: new Date(data.login_opens_at),
+        startTime: new Date(data.start_time),
+        joinWindowClosesAt: new Date(data.join_window_closes_at),
+        endTime: new Date(data.end_time),
+        status: "SCHEDULED",
+        isRetestSlot: data.is_retest_slot ?? false,
+      },
+    });
+
+    revalidatePath("/admin/exams");
+    return { success: true, slotId: slot.id };
+  } catch (error) {
+    console.error("Error creating slot:", error);
+    return { success: false, error: String(error) };
+  }
+}
+
+export async function updateExamSlotAction(
+  slotId: string,
+  data: {
+    slot_name?: string;
+    login_opens_at?: string;
+    start_time?: string;
+    join_window_closes_at?: string;
+    end_time?: string;
+    status?: SlotStatus;
+  }
+) {
+  try {
+    await prisma.examSlot.update({
+      where: { id: slotId },
+      data: {
+        ...(data.slot_name ? { slotName: data.slot_name.trim() } : {}),
+        ...(data.login_opens_at ? { loginOpensAt: new Date(data.login_opens_at) } : {}),
+        ...(data.start_time ? { startTime: new Date(data.start_time) } : {}),
+        ...(data.join_window_closes_at ? { joinWindowClosesAt: new Date(data.join_window_closes_at) } : {}),
+        ...(data.end_time ? { endTime: new Date(data.end_time) } : {}),
+        ...(data.status ? { status: data.status } : {}),
+      },
+    });
+
+    revalidatePath("/admin/exams");
+    revalidatePath("/admin/attendance");
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating slot:", error);
+    return { success: false, error: String(error) };
+  }
+}
+
+export async function deleteExamSlotAction(slotId: string) {
+  try {
+    await prisma.examSlot.delete({ where: { id: slotId } });
+    revalidatePath("/admin/exams");
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting slot:", error);
+    return { success: false, error: String(error) };
+  }
+}
+
 // ----------------------------------------------------------------------------
 // 4. QUESTION BANK (COMMON + DEPARTMENT-SPECIFIC)
 // ----------------------------------------------------------------------------
@@ -583,6 +1059,110 @@ export async function deleteQuestionAction(id: string) {
   }
 }
 
+export async function updateQuestionAction(
+  id: string,
+  data: {
+    scope?: QuestionScope;
+    department_id?: string | null;
+    section_name?: string;
+    question_text: string;
+    question_type: QuestionType;
+    options: { id: string; text: string }[];
+    correct_answers: string[];
+    marks: number;
+    negative_marks: number;
+    explanation?: string;
+  }
+) {
+  try {
+    const scope = data.scope || "COMMON";
+    const departmentId = scope === "COMMON" ? null : data.department_id || null;
+    const sectionName = data.section_name || (scope === "COMMON" ? "Part A: General & Research Aptitude" : "Part B: Department Specialization");
+
+    await prisma.question.update({
+      where: { id },
+      data: {
+        scope,
+        departmentId,
+        sectionName,
+        questionText: data.question_text,
+        questionType: data.question_type,
+        options: data.options as object,
+        correctAnswers: data.correct_answers as object,
+        marks: data.marks,
+        negativeMarks: data.negative_marks,
+        explanation: data.explanation || null,
+      },
+    });
+
+    revalidatePath("/admin/questions");
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating question:", error);
+    return { success: false, error: String(error) };
+  }
+}
+
+export async function bulkImportQuestionsAction(
+  examId: string,
+  questions: Array<{
+    scope: QuestionScope;
+    department_code?: string;
+    section_name?: string;
+    question_text: string;
+    question_type?: QuestionType;
+    options: { id: string; text: string }[];
+    correct_answers: string[];
+    marks: number;
+    negative_marks?: number;
+    explanation?: string;
+  }>
+) {
+  try {
+    const depts = await prisma.department.findMany();
+    const deptMap: Record<string, string> = {};
+    for (const d of depts) {
+      deptMap[d.code.toUpperCase()] = d.id;
+    }
+
+    const currentCount = await prisma.question.count({ where: { examId } });
+    let inserted = 0;
+
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
+      const scope = q.scope || "COMMON";
+      let departmentId: string | null = null;
+      if (scope === "DEPARTMENT_SPECIFIC" && q.department_code) {
+        departmentId = deptMap[q.department_code.toUpperCase()] || null;
+      }
+
+      await prisma.question.create({
+        data: {
+          examId,
+          scope,
+          departmentId,
+          sectionName: q.section_name || (scope === "COMMON" ? "Part A: General & Research Aptitude" : "Part B: Department Specialization"),
+          questionText: q.question_text,
+          questionType: q.question_type || "MCQ",
+          options: q.options as object,
+          correctAnswers: q.correct_answers as object,
+          marks: q.marks,
+          negativeMarks: q.negative_marks ?? 0,
+          explanation: q.explanation || null,
+          orderIndex: currentCount + i + 1,
+        },
+      });
+      inserted++;
+    }
+
+    revalidatePath("/admin/questions");
+    return { success: true, count: inserted };
+  } catch (error) {
+    console.error("Error bulk importing questions:", error);
+    return { success: false, error: String(error), count: 0 };
+  }
+}
+
 // ----------------------------------------------------------------------------
 // 5. ATTENDANCE MANAGEMENT ACTIONS
 // ----------------------------------------------------------------------------
@@ -655,6 +1235,38 @@ export async function updateCandidateAttendanceAction(sessionId: string, status:
     return { success: true };
   } catch (error) {
     console.error("Error updating attendance:", error);
+    return { success: false, error: String(error) };
+  }
+}
+
+export async function bulkUpdateAttendanceAction(
+  examId: string,
+  slotId: string | undefined,
+  fromStatus: AttendanceStatus,
+  toStatus: AttendanceStatus
+) {
+  try {
+    const where: Record<string, unknown> = {
+      examId,
+      attendanceStatus: fromStatus,
+    };
+    if (slotId) {
+      where.slotId = slotId;
+    }
+
+    const updated = await prisma.examSession.updateMany({
+      where,
+      data: {
+        attendanceStatus: toStatus,
+        status: toStatus === "IN_EXAM" ? "IN_PROGRESS" : toStatus === "ABSENT" ? "ABSENT" : undefined,
+        ...(toStatus === "IN_EXAM" ? { startedAt: new Date() } : {}),
+      },
+    });
+
+    revalidatePath("/admin/attendance");
+    return { success: true, count: updated.count };
+  } catch (error) {
+    console.error("Error bulk updating attendance:", error);
     return { success: false, error: String(error) };
   }
 }
@@ -810,6 +1422,90 @@ export async function createSecondSlotAndEnrollAction(data: {
   }
 }
 
+export async function manualAddCandidateToSecondSlotAction(
+  examId: string,
+  studentId: string,
+  reason: string
+) {
+  try {
+    let session = await prisma.examSession.findFirst({
+      where: { examId, studentId, attemptNumber: 1 },
+    });
+
+    if (!session) {
+      session = await prisma.examSession.create({
+        data: {
+          examId,
+          studentId,
+          status: "TECHNICAL_FAILURE",
+          attendanceStatus: "TECHNICAL_FAILURE",
+          attemptNumber: 1,
+          isEligibleForRetest: true,
+        },
+      });
+    } else {
+      await prisma.examSession.update({
+        where: { id: session.id },
+        data: {
+          isEligibleForRetest: true,
+          attendanceStatus: session.attendanceStatus === "NOT_REPORTED" ? "ABSENT" : session.attendanceStatus,
+        },
+      });
+    }
+
+    await prisma.examAuditLog.create({
+      data: {
+        sessionId: session.id,
+        eventType: "RETEST_ELIGIBILITY_MANUALLY_GRANTED",
+        severity: "INFO",
+        details: { studentId, examId, reason },
+      },
+    }).catch(() => null);
+
+    revalidatePath("/admin/second-slot");
+    return { success: true };
+  } catch (error) {
+    console.error("Error manually adding candidate to second slot:", error);
+    return { success: false, error: String(error) };
+  }
+}
+
+export async function getExistingSecondSlotsAction(examId: string) {
+  try {
+    const slots = await prisma.examSlot.findMany({
+      where: { examId, isRetestSlot: true },
+      include: {
+        examSessions: {
+          include: {
+            student: { include: { department: true } },
+          },
+        },
+      },
+      orderBy: { slotNumber: "asc" },
+    });
+
+    return slots.map((s) => ({
+      id: s.id,
+      slot_name: s.slotName,
+      slot_number: s.slotNumber,
+      start_time: s.startTime.toISOString(),
+      end_time: s.endTime.toISOString(),
+      status: s.status,
+      enrolled_candidates: s.examSessions.map((es) => ({
+        sessionId: es.id,
+        regNumber: es.student.regNumber,
+        fullName: es.student.fullName,
+        departmentCode: es.student.department.code,
+        status: es.status,
+        attendanceStatus: es.attendanceStatus,
+      })),
+    }));
+  } catch (error) {
+    console.error("Error fetching existing second slots:", error);
+    return [];
+  }
+}
+
 // ----------------------------------------------------------------------------
 // 7. RESULTS & EVALUATION ACTIONS
 // ----------------------------------------------------------------------------
@@ -862,6 +1558,113 @@ export async function getExamResultsAction(examId: string, slotId?: string) {
   } catch (error) {
     console.error("Error in getExamResultsAction:", error);
     return { success: false, error: String(error), exam: null, results: [] };
+  }
+}
+
+export async function getCandidateSessionResponsesAction(sessionId: string) {
+  try {
+    const session = await prisma.examSession.findUnique({
+      where: { id: sessionId },
+      include: {
+        student: { include: { department: true } },
+        exam: {
+          include: {
+            questions: {
+              orderBy: [{ scope: "asc" }, { orderIndex: "asc" }],
+            },
+          },
+        },
+        answers: true,
+      },
+    });
+
+    if (!session) return { success: false, error: "Session not found", candidate: null, responses: [] };
+
+    const answerMap = new Map(session.answers.map((a) => [a.questionId, a]));
+
+    const applicableQuestions = session.exam.questions.filter(
+      (q) => q.scope === "COMMON" || q.departmentId === session.student.departmentId
+    );
+
+    const responses: CandidateResponseDetail[] = applicableQuestions.map((q) => {
+      const ans = answerMap.get(q.id);
+      const selected = Array.isArray(ans?.selectedOptions) ? (ans.selectedOptions as string[]) : [];
+      const correct = Array.isArray(q.correctAnswers) ? (q.correctAnswers as string[]) : [];
+      const isCorrect = selected.length === correct.length && selected.every((val) => correct.includes(val));
+      const marks = Number(q.marks);
+      const neg = Number(q.negativeMarks);
+      const scoreEarned = isCorrect ? marks : selected.length > 0 ? -neg : 0;
+
+      return {
+        questionId: q.id,
+        questionText: q.questionText,
+        sectionName: q.sectionName || "Section",
+        scope: q.scope,
+        questionType: q.questionType,
+        marks,
+        negativeMarks: neg,
+        options: Array.isArray(q.options) ? (q.options as { id: string; text: string }[]) : [],
+        correctAnswers: correct,
+        selectedOptions: selected,
+        textResponse: ans?.textResponse || null,
+        isCorrect,
+        scoreEarned,
+      };
+    });
+
+    return {
+      success: true,
+      candidate: {
+        fullName: session.student.fullName,
+        regNumber: session.student.regNumber,
+        departmentCode: session.student.department.code,
+        examTitle: session.exam.title,
+        finalScore: session.finalScore !== null ? Number(session.finalScore) : null,
+        isPassed: session.isPassed,
+        integrityScore: session.integrityScore,
+        violationCount: session.violationCount,
+      },
+      responses,
+    };
+  } catch (error) {
+    console.error("Error fetching candidate response breakdown:", error);
+    return { success: false, error: String(error), candidate: null, responses: [] };
+  }
+}
+
+export async function overrideCandidateScoreAction(
+  sessionId: string,
+  finalScore: number,
+  isPassed: boolean,
+  remark?: string
+) {
+  try {
+    await prisma.examSession.update({
+      where: { id: sessionId },
+      data: {
+        finalScore,
+        isPassed,
+      },
+    });
+
+    await prisma.examAuditLog.create({
+      data: {
+        sessionId,
+        eventType: "SCORE_OVERRIDDEN_BY_COMMITTEE",
+        severity: "MEDIUM",
+        details: {
+          adjustedFinalScore: finalScore,
+          adjustedIsPassed: isPassed,
+          committeeRemark: remark || "Evaluated under university discretionary appeal",
+        },
+      },
+    });
+
+    revalidatePath("/admin/results");
+    return { success: true };
+  } catch (error) {
+    console.error("Error overriding candidate score:", error);
+    return { success: false, error: String(error) };
   }
 }
 
@@ -926,6 +1729,58 @@ export async function terminateSessionAction(sessionId: string) {
     return { success: true };
   } catch (error) {
     console.error("Error terminating session:", error);
+    return { success: false, error: String(error) };
+  }
+}
+
+export async function getCandidateAuditLogsAction(sessionId: string): Promise<SerializedAuditLog[]> {
+  try {
+    const logs = await prisma.examAuditLog.findMany({
+      where: { sessionId },
+      orderBy: { timestamp: "desc" },
+    });
+
+    return logs.map((l) => ({
+      id: l.id,
+      session_id: l.sessionId,
+      event_type: l.eventType,
+      severity: l.severity,
+      timestamp: l.timestamp.toISOString(),
+      evidence_snapshot_url: l.evidenceSnapshotUrl,
+      evidence_audio_url: l.evidenceAudioUrl,
+      details: (l.details as Record<string, unknown>) || {},
+    }));
+  } catch (error) {
+    console.error("Error fetching audit logs:", error);
+    return [];
+  }
+}
+
+export async function broadcastProctorAnnouncementAction(examId: string, message: string) {
+  try {
+    const sessions = await prisma.examSession.findMany({
+      where: {
+        examId,
+        status: { in: ["IN_PROGRESS", "WAITING_ROOM"] },
+      },
+      select: { id: true },
+    });
+
+    for (const s of sessions) {
+      await prisma.examAuditLog.create({
+        data: {
+          sessionId: s.id,
+          eventType: "PROCTOR_ANNOUNCEMENT_BROADCAST",
+          severity: "INFO",
+          details: { message, broadcastAt: new Date().toISOString() },
+        },
+      }).catch(() => null);
+    }
+
+    revalidatePath("/admin/proctor");
+    return { success: true, count: sessions.length };
+  } catch (error) {
+    console.error("Error broadcasting announcement:", error);
     return { success: false, error: String(error) };
   }
 }
