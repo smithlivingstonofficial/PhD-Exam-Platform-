@@ -151,31 +151,31 @@ export function useCandidateWebRTCStreamer({
         }
       };
 
-      // 4. Monitor ICE State & Failover
+      // 4. Monitor ICE and PeerConnection State
       pc.oniceconnectionstatechange = () => {
         const state = pc.iceConnectionState;
         if (state === "connected" || state === "completed") {
-          if (connectionTimeoutRef.current) {
-            clearTimeout(connectionTimeoutRef.current);
-            connectionTimeoutRef.current = null;
-          }
           stopFallbackSnapshots();
           setConnectionState("LIVE");
         } else if (state === "failed") {
-          console.warn("[WebRTC Candidate] Direct P2P ICE failed. Initiating zero-cost WebP snapshot fallback.");
-          startFallbackSnapshots();
+          console.warn("[WebRTC Candidate] Direct P2P ICE failed.");
+          setConnectionState("FAILED");
         } else if (state === "disconnected") {
           setConnectionState("DISCONNECTED");
         }
       };
 
-      // 5. Safety timeout: if not connected within 10 seconds, activate fallback
-      connectionTimeoutRef.current = setTimeout(() => {
-        if (pc.iceConnectionState !== "connected" && pc.iceConnectionState !== "completed") {
-          console.warn("[WebRTC Candidate] Handshake timeout. Activating snapshot fallback.");
-          startFallbackSnapshots();
+      pc.onconnectionstatechange = () => {
+        const state = pc.connectionState;
+        if (state === "connected") {
+          stopFallbackSnapshots();
+          setConnectionState("LIVE");
+        } else if (state === "failed") {
+          setConnectionState("FAILED");
+        } else if (state === "disconnected") {
+          setConnectionState("DISCONNECTED");
         }
-      }, 10000);
+      };
 
       // 6. Create SDP Offer
       const offer = await pc.createOffer({

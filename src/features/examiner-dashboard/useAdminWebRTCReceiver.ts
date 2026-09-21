@@ -33,6 +33,11 @@ export function useAdminWebRTCReceiver({
   const audioContextRef = useRef<AudioContext | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isMutedRef = useRef<boolean>(isMuted);
+
+  useEffect(() => {
+    isMutedRef.current = isMuted;
+  }, [isMuted]);
 
   // --------------------------------------------------------------------------
   // Clean up WebRTC & Audio Context
@@ -305,14 +310,25 @@ export function useAdminWebRTCReceiver({
           }
         };
 
-        // 4. ICE Connection State Monitoring
+        // 4. ICE & PeerConnection State Monitoring
         pc.oniceconnectionstatechange = () => {
           const state = pc.iceConnectionState;
           if (state === "connected" || state === "completed") {
             setConnectionState("LIVE");
           } else if (state === "failed") {
-            console.warn("[WebRTC Admin] P2P ICE failed. Awaiting fallback snapshots.");
-            setConnectionState("FALLBACK");
+            console.warn("[WebRTC Admin] P2P ICE failed.");
+            setConnectionState("FAILED");
+          } else if (state === "disconnected") {
+            setConnectionState("DISCONNECTED");
+          }
+        };
+
+        pc.onconnectionstatechange = () => {
+          const state = pc.connectionState;
+          if (state === "connected") {
+            setConnectionState("LIVE");
+          } else if (state === "failed") {
+            setConnectionState("FAILED");
           } else if (state === "disconnected") {
             setConnectionState("DISCONNECTED");
           }
@@ -396,7 +412,8 @@ export function useAdminWebRTCReceiver({
       channel.unsubscribe();
       channelRef.current = null;
     };
-  }, [sessionId, autoConnect, isMuted, setupAudioAnalyzer, connect, cleanupConnection]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, autoConnect, setupAudioAnalyzer, connect, cleanupConnection]);
 
   return {
     connectionState,

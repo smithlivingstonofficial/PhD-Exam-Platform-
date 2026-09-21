@@ -45,40 +45,32 @@ export function CandidateSpotlightModal({
   onClose,
   onIssueWarning,
   onDisqualify,
-  streamContext,
 }: CandidateSpotlightModalProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  // Fallback receiver if no streamContext was passed from candidate card
-  const internalReceiver = useAdminWebRTCReceiver({
-    sessionId: isOpen && !streamContext ? candidate.id : null,
+  // Dedicated direct P2P receiver for this modal
+  const receiver = useAdminWebRTCReceiver({
+    sessionId: isOpen ? candidate.id : null,
     autoConnect: true,
   });
 
-  // Pick active context
-  const activeStream = streamContext ? streamContext.stream : internalReceiver.remoteStream;
-  const activeConnectionState = streamContext
-    ? streamContext.connectionState
-    : internalReceiver.connectionState;
-  const activeFallbackSnapshot = streamContext
-    ? streamContext.fallbackSnapshot
-    : internalReceiver.fallbackSnapshot;
-  const activeIsMuted = streamContext ? streamContext.isMuted : internalReceiver.isMuted;
-  const activeAudioLevel = streamContext ? streamContext.audioLevel : internalReceiver.audioLevel;
-  const activeLatencyMs = streamContext ? streamContext.latencyMs : internalReceiver.latencyMs;
+  const activeStream = receiver.remoteStream;
+  const activeConnectionState = receiver.connectionState;
+  const activeFallbackSnapshot = receiver.fallbackSnapshot;
+  const activeIsMuted = receiver.isMuted;
+  const activeAudioLevel = receiver.audioLevel;
+  const activeLatencyMs = receiver.latencyMs;
 
-  const handleConnect = streamContext ? streamContext.connect : internalReceiver.connect;
-  const handleToggleMute = streamContext ? streamContext.toggleMute : internalReceiver.toggleMute;
-  const handleDisconnect = streamContext ? streamContext.disconnect : internalReceiver.disconnect;
+  const handleConnect = receiver.connect;
+  const handleToggleMute = receiver.toggleMute;
+  const handleDisconnect = receiver.disconnect;
 
   // Seamlessly bind and play active media stream on the video element
   useEffect(() => {
     const videoEl = videoRef.current;
     if (!videoEl) return;
 
-    if (!streamContext) {
-      internalReceiver.setVideoRef(videoEl);
-    }
+    receiver.setVideoRef(videoEl);
 
     if (!activeStream) return;
 
@@ -95,7 +87,7 @@ export function CandidateSpotlightModal({
     } catch (err) {
       console.warn("[Spotlight Modal] Error attaching stream to video:", err);
     }
-  }, [activeStream, activeIsMuted, activeConnectionState, streamContext, internalReceiver]);
+  }, [activeStream, activeIsMuted, activeConnectionState, receiver]);
 
   if (!isOpen) return null;
 
@@ -112,10 +104,7 @@ export function CandidateSpotlightModal({
   const isFallback = !isLive && (activeConnectionState === "FALLBACK" || Boolean(activeFallbackSnapshot));
 
   const handleClose = () => {
-    // If we used an internal receiver, tear it down
-    if (!streamContext) {
-      handleDisconnect();
-    }
+    handleDisconnect();
     onClose();
   };
 
