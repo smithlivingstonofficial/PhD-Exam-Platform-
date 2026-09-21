@@ -101,9 +101,15 @@ export function CandidateSpotlightModal({
 
   const isCritical = candidate.integrity_score < 75 || candidate.violation_count >= 3;
   const isWatchlist = !isCritical && (candidate.integrity_score < 90 || candidate.violation_count > 0);
-  const isLive = activeConnectionState === "LIVE";
+  
+  // Prioritize active live video track if available
+  const hasLiveVideoTrack = Boolean(
+    activeStream &&
+    activeStream.getVideoTracks().some((t) => t.readyState === "live" && t.enabled)
+  );
+  const isLive = activeConnectionState === "LIVE" || hasLiveVideoTrack;
   const isConnecting = activeConnectionState === "CONNECTING";
-  const isFallback = activeConnectionState === "FALLBACK";
+  const isFallback = !isLive && (activeConnectionState === "FALLBACK" || Boolean(activeFallbackSnapshot));
 
   const handleClose = () => {
     // If we used an internal receiver, tear it down
@@ -114,25 +120,25 @@ export function CandidateSpotlightModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[92vh]">
-        {/* Modal Top Bar */}
-        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in select-none">
+      <div className="bg-white border border-slate-200 rounded-3xl shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[92vh]">
+        {/* Modal Top Bar - Clean SaaS Light */}
+        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/90">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/40 text-indigo-400 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center shadow-xs">
               <Camera className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-black text-white">{candidate.name}</h2>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-950 text-indigo-300 border border-indigo-500/40">
+                <h2 className="text-base font-black text-slate-900">{candidate.name}</h2>
+                <span className="px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
                   {candidate.department_code}
                 </span>
-                <span className="text-xs text-slate-400 font-mono">
+                <span className="text-xs text-slate-500 font-mono">
                   • {candidate.reg_number}
                 </span>
               </div>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-500 mt-0.5">
                 {candidate.exam_title} — {candidate.slot_name}
               </p>
             </div>
@@ -141,12 +147,12 @@ export function CandidateSpotlightModal({
           <div className="flex items-center gap-3">
             {/* Realtime Integrity Badge */}
             <div
-              className={`px-3 py-1 rounded-full text-xs font-bold border flex items-center gap-1.5 ${
+              className={`px-3 py-1 rounded-full text-xs font-bold border flex items-center gap-1.5 shadow-2xs ${
                 isCritical
-                  ? "bg-rose-950/80 text-rose-300 border-rose-500/40"
+                  ? "bg-rose-50 text-rose-700 border-rose-200"
                   : isWatchlist
-                  ? "bg-amber-950/80 text-amber-300 border-amber-500/40"
-                  : "bg-emerald-950/80 text-emerald-300 border-emerald-500/40"
+                  ? "bg-amber-50 text-amber-700 border-amber-200"
+                  : "bg-emerald-50 text-emerald-700 border-emerald-200"
               }`}
             >
               {isCritical ? <ShieldAlert className="w-3.5 h-3.5" /> : <ShieldCheck className="w-3.5 h-3.5" />}
@@ -155,7 +161,7 @@ export function CandidateSpotlightModal({
 
             <button
               onClick={handleClose}
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -163,17 +169,17 @@ export function CandidateSpotlightModal({
         </div>
 
         {/* Modal Main Content: 16:9 Video Viewport & Telemetry Sidebar */}
-        <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 bg-white">
           {/* Main Camera Viewport (2 cols) */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="relative aspect-video rounded-2xl bg-black border border-slate-800 overflow-hidden flex items-center justify-center shadow-2xl group">
+            <div className="relative aspect-video rounded-2xl bg-slate-950 border border-slate-200 overflow-hidden flex items-center justify-center shadow-lg group">
               {/* HUD Target Overlays */}
               <div className="absolute top-3 left-3 w-4 h-4 border-t-2 border-l-2 border-indigo-400 z-20 pointer-events-none" />
               <div className="absolute top-3 right-3 w-4 h-4 border-t-2 border-r-2 border-indigo-400 z-20 pointer-events-none" />
               <div className="absolute bottom-3 left-3 w-4 h-4 border-b-2 border-l-2 border-indigo-400 z-20 pointer-events-none" />
               <div className="absolute bottom-3 right-3 w-4 h-4 border-b-2 border-r-2 border-indigo-400 z-20 pointer-events-none" />
 
-              {/* Video Stream Element (Always mounted for immediate render without repaint glitches) */}
+              {/* Video Stream Element (Always mounted for immediate fluid render) */}
               <video
                 ref={videoRef}
                 autoPlay
@@ -184,7 +190,7 @@ export function CandidateSpotlightModal({
                 }`}
               />
 
-              {/* Fallback Snapshot View */}
+              {/* Fallback Snapshot View (Shown only if direct WebRTC is unavailable) */}
               {isFallback && activeFallbackSnapshot && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -228,7 +234,7 @@ export function CandidateSpotlightModal({
               )}
 
               {/* Top Status Pill */}
-              <div className="absolute top-4 left-4 z-20 flex items-center gap-2 px-3 py-1 rounded-lg bg-slate-900/90 backdrop-blur-md border border-slate-700 text-xs font-mono font-bold">
+              <div className="absolute top-4 left-4 z-20 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/75 backdrop-blur-md border border-white/10 text-xs font-mono font-bold text-white shadow-sm">
                 {isLive ? (
                   <>
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -262,17 +268,17 @@ export function CandidateSpotlightModal({
                   onClick={handleToggleMute}
                   className={`px-3 py-1.5 rounded-lg backdrop-blur-md border text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all shadow-md ${
                     activeIsMuted
-                      ? "bg-slate-900/90 border-slate-700 text-slate-300 hover:text-white"
-                      : "bg-emerald-900/90 border-emerald-500 text-emerald-200"
+                      ? "bg-black/75 border-white/10 text-slate-200 hover:text-white"
+                      : "bg-emerald-600 border-emerald-400 text-white shadow-sm"
                   }`}
                 >
-                  {activeIsMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5 text-emerald-400" />}
+                  {activeIsMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5 text-white" />}
                   <span>{activeIsMuted ? "Unmute Audio" : "Room Audio Live"}</span>
                 </button>
               </div>
 
               {/* Bottom Decibel Visualizer Bar */}
-              <div className="absolute bottom-3 left-3 right-3 z-20 px-3 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-800 flex items-center gap-3">
+              <div className="absolute bottom-3 left-3 right-3 z-20 px-3.5 py-2 rounded-xl bg-black/75 backdrop-blur-md border border-white/10 flex items-center gap-3 text-white shadow-sm">
                 <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-slate-300 shrink-0">
                   <Mic className={`w-3.5 h-3.5 ${activeAudioLevel > 50 ? "text-rose-400" : "text-emerald-400"}`} />
                   <span>Mic: {activeAudioLevel} dB</span>
@@ -289,65 +295,67 @@ export function CandidateSpotlightModal({
                     style={{ width: `${Math.max(8, Math.min(100, isLive ? activeAudioLevel : 12))}%` }}
                   />
                 </div>
-                <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                <span className="text-[10px] font-mono text-slate-300 shrink-0">
                   {activeAudioLevel > 65 ? "LOUD NOISE" : "Quiet Baseline"}
                 </span>
               </div>
             </div>
 
-            {/* Architecture Invariants Banner */}
+            {/* Architecture Invariants Banner - SaaS Light Cards */}
             <div className="grid grid-cols-3 gap-3">
-              <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 text-center">
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/90 text-center shadow-2xs">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
                   Media Path
                 </span>
-                <span className="text-xs font-mono font-bold text-indigo-400 mt-0.5 block">
+                <span className="text-xs font-mono font-bold text-indigo-700 mt-0.5 block">
                   Direct UDP (DTLS-SRTP)
                 </span>
               </div>
-              <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 text-center">
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/90 text-center shadow-2xs">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
                   Server Egress Cost
                 </span>
-                <span className="text-xs font-mono font-bold text-emerald-400 mt-0.5 block">
+                <span className="text-xs font-mono font-bold text-emerald-700 mt-0.5 block">
                   $0.00 (Zero Server Load)
                 </span>
               </div>
-              <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 text-center">
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/90 text-center shadow-2xs">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
                   Bandwidth Cap
                 </span>
-                <span className="text-xs font-mono font-bold text-amber-400 mt-0.5 block">
+                <span className="text-xs font-mono font-bold text-amber-700 mt-0.5 block">
                   800 kbps (720p HD P2P)
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Right Sidebar: Candidate Telemetry & Interventions */}
+          {/* Right Sidebar: Candidate Telemetry & Interventions - SaaS Light */}
           <div className="space-y-4 flex flex-col justify-between">
             <div className="space-y-4">
               {/* Profile Card */}
-              <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2.5">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-3 shadow-2xs">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
                   Candidate Dossier
                 </h4>
-                <div className="space-y-1.5 text-xs">
-                  <div className="flex justify-between">
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between items-center pb-1.5 border-b border-slate-200/60">
                     <span className="text-slate-500">Student ID:</span>
-                    <span className="text-slate-300 font-mono font-semibold">{candidate.student_id}</span>
+                    <span className="text-slate-800 font-mono font-semibold text-[11px] truncate max-w-[170px]" title={candidate.student_id}>
+                      {candidate.student_id}
+                    </span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center pb-1.5 border-b border-slate-200/60">
                     <span className="text-slate-500">Registration:</span>
-                    <span className="text-slate-300 font-mono font-semibold">{candidate.reg_number}</span>
+                    <span className="text-slate-800 font-mono font-semibold">{candidate.reg_number}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center pb-1.5 border-b border-slate-200/60">
                     <span className="text-slate-500">Department:</span>
-                    <span className="text-indigo-400 font-semibold">{candidate.department_name}</span>
+                    <span className="text-indigo-700 font-bold">{candidate.department_name}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-slate-500">Infraction Count:</span>
-                    <span className={`font-bold ${candidate.violation_count > 0 ? "text-rose-400" : "text-emerald-400"}`}>
+                    <span className={`font-bold ${candidate.violation_count > 0 ? "text-rose-600" : "text-emerald-700"}`}>
                       {candidate.violation_count} recorded
                     </span>
                   </div>
@@ -355,16 +363,16 @@ export function CandidateSpotlightModal({
               </div>
 
               {/* Latest Incidents */}
-              <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2.5">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-2.5 shadow-2xs">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center justify-between">
                   <span>Recent Event</span>
-                  <Activity className="w-3.5 h-3.5 text-indigo-400" />
+                  <Activity className="w-3.5 h-3.5 text-indigo-600" />
                 </h4>
-                <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
-                  <p className="font-semibold text-slate-200">
+                <div className="p-3 rounded-xl bg-white border border-slate-200 text-xs shadow-2xs">
+                  <p className="font-semibold text-slate-800">
                     {candidate.recent_incident || "Normal candidate conduct verified"}
                   </p>
-                  <span className="text-[10px] text-slate-500 font-mono mt-1 block">
+                  <span className="text-[10px] text-slate-400 font-mono mt-1 block">
                     Telemetry synced via Supabase Realtime
                   </span>
                 </div>
@@ -372,13 +380,13 @@ export function CandidateSpotlightModal({
             </div>
 
             {/* Quick Invigilator Interventions */}
-            <div className="space-y-2.5 pt-4 border-t border-slate-800">
+            <div className="space-y-2.5 pt-4 border-t border-slate-200">
               <button
                 type="button"
                 onClick={() => {
                   onIssueWarning(candidate);
                 }}
-                className="w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md active:scale-98 cursor-pointer"
+                className="w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-xs active:scale-98 cursor-pointer"
               >
                 <BellRing className="w-4 h-4 text-slate-950" />
                 <span>Issue Official Warning Alert</span>
@@ -389,9 +397,9 @@ export function CandidateSpotlightModal({
                 onClick={() => {
                   onDisqualify(candidate);
                 }}
-                className="w-full py-2.5 px-4 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/50 text-rose-300 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md active:scale-98 cursor-pointer"
+                className="w-full py-2.5 px-4 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-2xs active:scale-98 cursor-pointer"
               >
-                <AlertTriangle className="w-4 h-4 text-rose-400" />
+                <AlertTriangle className="w-4 h-4 text-rose-600" />
                 <span>Disqualify Candidate Session</span>
               </button>
             </div>
