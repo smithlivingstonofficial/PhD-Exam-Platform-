@@ -37,41 +37,56 @@ export function AdminSidebar() {
 
   const sections: NavSection[] = [
     {
-      title: "Main Management",
+      title: "Command Center",
       items: [
         { label: "Dashboard Overview", href: "/admin", icon: LayoutDashboard },
-        { label: "Academic Departments", href: "/admin/departments", icon: Building2 },
-        { label: "Candidate Registry", href: "/admin/candidates", icon: Users },
       ],
     },
     {
-      title: "Exams & Evaluation",
+      title: "1 · Pre-Exam Setup",
       items: [
-        { label: "Exams & Schedules", href: "/admin/exams", icon: BookOpenCheck },
+        { label: "Academic Departments", href: "/admin/departments", icon: Building2 },
+        { label: "Candidate Registry", href: "/admin/candidates", icon: Users },
         { 
           label: "Question Bank", 
           href: "/admin/questions", 
           icon: HelpCircle,
-          badge: { text: "Questions", variant: "indigo" } 
+          badge: { text: "Bank", variant: "indigo" } 
         },
-        { label: "Student Attendance", href: "/admin/attendance", icon: UserCheck },
-        { label: "Results & Marks", href: "/admin/results", icon: Award },
+        { label: "Exams & Schedules", href: "/admin/exams", icon: BookOpenCheck },
       ],
     },
     {
-      title: "Monitoring & Retests",
+      title: "2 · Live Operations",
       items: [
+        { 
+          label: "Student Attendance", 
+          href: "/admin/attendance", 
+          icon: UserCheck,
+          badge: { text: "Check-in", variant: "emerald" } 
+        },
         { 
           label: "Live Exam Monitoring", 
           href: "/admin/proctor", 
           icon: ShieldAlert,
           badge: { text: "LIVE", variant: "rose", pulse: true } 
         },
+      ],
+    },
+    {
+      title: "3 · Evaluation & Retests",
+      items: [
         { 
           label: "Re-Exam / Make-up Slot", 
           href: "/admin/second-slot", 
           icon: RefreshCw,
           badge: { text: "Slot 2", variant: "violet" } 
+        },
+        { 
+          label: "Results & Marks", 
+          href: "/admin/results", 
+          icon: Award,
+          badge: { text: "Scores", variant: "indigo" } 
         },
       ],
     },

@@ -26,10 +26,10 @@ export function BulkImportQuestionsModal({
 
   if (!isOpen) return null;
 
-  const sampleQuestions = [
+  const jsonFormatTemplate = [
     {
       scope: "COMMON",
-      section_name: "Part A: Research Aptitude",
+      section_name: "Part A: Research Aptitude & Methodology",
       question_text: "What is the primary objective of exploratory scientific research?",
       options: [
         { id: "a", text: "To gain familiarity with a phenomenon or formulate a hypothesis" },
@@ -44,13 +44,13 @@ export function BulkImportQuestionsModal({
     {
       scope: "DEPARTMENT_SPECIFIC",
       department_code: departments[0]?.code || "CSE",
-      section_name: "Part B: Core Subject",
-      question_text: "Which data structure provides constant amortized time O(1) for insert and lookup operations?",
+      section_name: `Part B: ${departments[0]?.name || "Core Subject"} Specialization`,
+      question_text: "Which computational data structure provides constant amortized time O(1) for insert and lookup operations?",
       options: [
-        { id: "a", text: "Hash Table" },
-        { id: "b", text: "Red-Black Tree" },
+        { id: "a", text: "Hash Table with Chaining" },
+        { id: "b", text: "Red-Black Balanced Tree" },
         { id: "c", text: "Binary Search Tree" },
-        { id: "d", text: "Min Heap" }
+        { id: "d", text: "Min-Heap Priority Queue" }
       ],
       correct_answers: ["a"],
       marks: 4,
@@ -58,8 +58,8 @@ export function BulkImportQuestionsModal({
     }
   ];
 
-  const handleLoadSample = () => {
-    setJsonText(JSON.stringify(sampleQuestions, null, 2));
+  const handleInsertTemplate = () => {
+    setJsonText(JSON.stringify(jsonFormatTemplate, null, 2));
   };
 
   const handleImport = async () => {
@@ -97,7 +97,7 @@ export function BulkImportQuestionsModal({
         alert("Unable to save questions: " + res.error);
       }
     } catch {
-      alert("Format error. Please verify the question list structure or click 'Load Example Questions'.");
+      alert("Format error. Please verify the question list JSON structure or click 'Insert Format Template'.");
       setIsSubmitting(false);
     }
   };
@@ -112,8 +112,8 @@ export function BulkImportQuestionsModal({
               <Upload className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900">Bulk Add Questions</h2>
-              <p className="text-xs text-slate-500">Paste questions for Part A and Part B using the standard template</p>
+              <h2 className="text-base font-bold text-slate-900">Bulk Import Questions</h2>
+              <p className="text-xs text-slate-500">Paste questions for Part A and Part B using the standard dual-paper JSON template</p>
             </div>
           </div>
           <button
@@ -128,14 +128,14 @@ export function BulkImportQuestionsModal({
         <div className="p-6 overflow-y-auto space-y-4">
           <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
             <span className="font-bold text-slate-800 flex items-center gap-1.5">
-              <FileText className="w-3.5 h-3.5 text-indigo-600" /> Standard Question Template
+              <FileText className="w-3.5 h-3.5 text-indigo-600" /> Standard Dual-Paper Template
             </span>
             <button
               type="button"
-              onClick={handleLoadSample}
-              className="text-[11px] text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 hover:underline"
+              onClick={handleInsertTemplate}
+              className="text-[11px] text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1.5 hover:underline"
             >
-              <Sparkles className="w-3 h-3" /> Load Example Questions
+              <Sparkles className="w-3 h-3" /> Insert Format Template
             </button>
           </div>
 

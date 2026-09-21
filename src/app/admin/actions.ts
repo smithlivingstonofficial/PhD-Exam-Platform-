@@ -170,7 +170,12 @@ export interface CandidateResponseDetail {
 export async function getDepartmentsAction(): Promise<SerializedDepartment[]> {
   try {
     const departments = await prisma.department.findMany({
-      include: {
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        description: true,
+        createdAt: true,
         _count: {
           select: { students: true, questions: true },
         },
@@ -199,10 +204,32 @@ export async function createDepartmentAction(data: {
   description?: string;
 }): Promise<{ success: boolean; departmentId?: string; error?: string }> {
   try {
+    const cleanCode = data.code.toUpperCase().trim();
+    const cleanName = data.name.trim();
+
+    if (!cleanCode || !cleanName) {
+      return { success: false, error: "Department code and name are required." };
+    }
+
+    if (!/^[A-Z0-9_-]{2,15}$/.test(cleanCode)) {
+      return { success: false, error: "Department code must be 2-15 alphanumeric characters (e.g. CSE, MECH)." };
+    }
+
+    // Check duplicate code
+    const existing = await prisma.department.findUnique({
+      where: { code: cleanCode },
+    });
+    if (existing) {
+      return {
+        success: false,
+        error: `A department with code "${cleanCode}" already exists (${existing.name}).`,
+      };
+    }
+
     const dept = await prisma.department.create({
       data: {
-        code: data.code.toUpperCase().trim(),
-        name: data.name.trim(),
+        code: cleanCode,
+        name: cleanName,
         description: data.description?.trim() || null,
       },
     });
@@ -214,19 +241,46 @@ export async function createDepartmentAction(data: {
     return { success: true, departmentId: dept.id };
   } catch (error) {
     console.error("Error creating department:", error);
-    return { success: false, error: String(error) };
+    return { success: false, error: "Database error while creating department." };
   }
 }
 
 export async function deleteDepartmentAction(id: string): Promise<{ success: boolean; error?: string }> {
   try {
+    const dept = await prisma.department.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: { students: true, questions: true },
+        },
+      },
+    });
+
+    if (!dept) {
+      return { success: false, error: "Department not found." };
+    }
+
+    if (dept._count.students > 0) {
+      return {
+        success: false,
+        error: `Cannot delete ${dept.name} (${dept.code}): ${dept._count.students} registered scholar(s) are enrolled. Please reassign scholars first.`,
+      };
+    }
+
+    if (dept._count.questions > 0) {
+      return {
+        success: false,
+        error: `Cannot delete ${dept.name} (${dept.code}): ${dept._count.questions} questions in the question bank are linked.`,
+      };
+    }
+
     await prisma.department.delete({ where: { id } });
     revalidatePath("/admin");
     revalidatePath("/admin/departments");
     return { success: true };
   } catch (error) {
     console.error("Error deleting department:", error);
-    return { success: false, error: String(error) };
+    return { success: false, error: "Failed to delete department. Database error." };
   }
 }
 
@@ -235,11 +289,33 @@ export async function updateDepartmentAction(
   data: { code: string; name: string; description?: string }
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    const cleanCode = data.code.toUpperCase().trim();
+    const cleanName = data.name.trim();
+
+    if (!cleanCode || !cleanName) {
+      return { success: false, error: "Department code and name are required." };
+    }
+
+    if (!/^[A-Z0-9_-]{2,15}$/.test(cleanCode)) {
+      return { success: false, error: "Department code must be 2-15 alphanumeric characters." };
+    }
+
+    // Check if code is taken by another department
+    const existing = await prisma.department.findUnique({
+      where: { code: cleanCode },
+    });
+    if (existing && existing.id !== id) {
+      return {
+        success: false,
+        error: `Department code "${cleanCode}" is already in use by ${existing.name}.`,
+      };
+    }
+
     await prisma.department.update({
       where: { id },
       data: {
-        code: data.code.toUpperCase().trim(),
-        name: data.name.trim(),
+        code: cleanCode,
+        name: cleanName,
         description: data.description?.trim() || null,
       },
     });
@@ -251,7 +327,7 @@ export async function updateDepartmentAction(
     return { success: true };
   } catch (error) {
     console.error("Error updating department:", error);
-    return { success: false, error: String(error) };
+    return { success: false, error: "Failed to update department." };
   }
 }
 
@@ -349,13 +425,60 @@ export async function createStudentAction(data: {
   access_code?: string;
 }): Promise<{ success: boolean; studentId?: string; error?: string }> {
   try {
-    const code = data.access_code || Math.floor(100000 + Math.random() * 900000).toString();
+    const cleanReg = data.reg_number.toUpperCase().trim();
+    const cleanName = data.full_name.trim();
+    const cleanEmail = data.email.toLowerCase().trim();
+    const deptId = data.department_id;
+
+    if (!cleanReg || !cleanName || !cleanEmail || !deptId) {
+      return { success: false, error: "Registration number, full name, email, and department are required." };
+    }
+
+    if (!/^[A-Z0-9_-]{3,30}$/.test(cleanReg)) {
+      return { success: false, error: "Registration number must be 3-30 alphanumeric characters (e.g. PHD26-CSE-001)." };
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return { success: false, error: "Please provide a valid email address (e.g. scholar@university.edu)." };
+    }
+
+    // Check duplicate regNumber
+    const existingReg = await prisma.student.findUnique({
+      where: { regNumber: cleanReg },
+    });
+    if (existingReg) {
+      return {
+        success: false,
+        error: `A scholar with registration number "${cleanReg}" already exists (${existingReg.fullName}).`,
+      };
+    }
+
+    // Check duplicate email
+    const existingEmail = await prisma.student.findUnique({
+      where: { email: cleanEmail },
+    });
+    if (existingEmail) {
+      return {
+        success: false,
+        error: `Email "${cleanEmail}" is already registered to ${existingEmail.fullName} (${existingEmail.regNumber}).`,
+      };
+    }
+
+    // Verify department exists
+    const dept = await prisma.department.findUnique({
+      where: { id: deptId },
+    });
+    if (!dept) {
+      return { success: false, error: "Selected academic department was not found." };
+    }
+
+    const code = data.access_code?.trim() || Math.floor(100000 + Math.random() * 900000).toString();
     const student = await prisma.student.create({
       data: {
-        regNumber: data.reg_number.toUpperCase().trim(),
-        fullName: data.full_name.trim(),
-        email: data.email.toLowerCase().trim(),
-        departmentId: data.department_id,
+        regNumber: cleanReg,
+        fullName: cleanName,
+        email: cleanEmail,
+        departmentId: deptId,
         phone: data.phone?.trim() || null,
         accessCode: code,
       },
@@ -363,10 +486,11 @@ export async function createStudentAction(data: {
 
     revalidatePath("/admin");
     revalidatePath("/admin/candidates");
+    revalidatePath("/admin/departments");
     return { success: true, studentId: student.id };
   } catch (error) {
     console.error("Error creating student:", error);
-    return { success: false, error: String(error) };
+    return { success: false, error: "Database error while registering research scholar." };
   }
 }
 
@@ -381,11 +505,33 @@ export async function updateStudentAction(
   }
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    const cleanName = data.full_name.trim();
+    const cleanEmail = data.email.toLowerCase().trim();
+
+    if (!cleanName || !cleanEmail || !data.department_id) {
+      return { success: false, error: "Full name, email, and department are required." };
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return { success: false, error: "Please provide a valid email address." };
+    }
+
+    // Check duplicate email for another scholar
+    const existingEmail = await prisma.student.findUnique({
+      where: { email: cleanEmail },
+    });
+    if (existingEmail && existingEmail.id !== id) {
+      return {
+        success: false,
+        error: `Email "${cleanEmail}" is already registered to another scholar (${existingEmail.fullName}).`,
+      };
+    }
+
     await prisma.student.update({
       where: { id },
       data: {
-        fullName: data.full_name.trim(),
-        email: data.email.toLowerCase().trim(),
+        fullName: cleanName,
+        email: cleanEmail,
         departmentId: data.department_id,
         phone: data.phone?.trim() || null,
         ...(data.access_code ? { accessCode: data.access_code.trim() } : {}),
@@ -394,22 +540,36 @@ export async function updateStudentAction(
 
     revalidatePath("/admin");
     revalidatePath("/admin/candidates");
+    revalidatePath("/admin/departments");
     return { success: true };
   } catch (error) {
     console.error("Error updating student:", error);
-    return { success: false, error: String(error) };
+    return { success: false, error: "Database error while updating scholar profile." };
   }
 }
 
 export async function deleteStudentAction(id: string): Promise<{ success: boolean; error?: string }> {
   try {
+    const student = await prisma.student.findUnique({
+      where: { id },
+      include: {
+        _count: { select: { examSessions: true } },
+      },
+    });
+
+    if (!student) {
+      return { success: false, error: "Scholar record not found." };
+    }
+
     await prisma.student.delete({ where: { id } });
     revalidatePath("/admin");
     revalidatePath("/admin/candidates");
+    revalidatePath("/admin/departments");
+    revalidatePath("/admin/attendance");
     return { success: true };
   } catch (error) {
     console.error("Error deleting student:", error);
-    return { success: false, error: String(error) };
+    return { success: false, error: "Failed to delete scholar record." };
   }
 }
 
@@ -487,27 +647,63 @@ export async function enrollStudentInExamAction(
   slotId?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    if (!studentId || !examId) {
+      return { success: false, error: "Scholar and examination identifiers are required." };
+    }
+
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!UUID_REGEX.test(studentId) || !UUID_REGEX.test(examId)) {
+      return { success: false, error: "Invalid scholar or examination ID format." };
+    }
+
+    // Verify student exists
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: { id: true, fullName: true, regNumber: true },
+    });
+    if (!student) {
+      return { success: false, error: "Scholar record could not be found." };
+    }
+
+    // Verify exam exists and retrieve its slots
+    const exam = await prisma.exam.findUnique({
+      where: { id: examId },
+      include: {
+        slots: { orderBy: { slotNumber: "asc" } },
+      },
+    });
+    if (!exam) {
+      return { success: false, error: "Selected examination does not exist." };
+    }
+
     // Check if student is already enrolled in this exam attempt 1
     const existing = await prisma.examSession.findFirst({
       where: { studentId, examId, attemptNumber: 1 },
     });
 
     if (existing) {
-      return { success: false, error: "Scholar is already enrolled in this exam." };
+      return { success: false, error: `${student.fullName} (${student.regNumber}) is already enrolled in this examination.` };
     }
 
-    let targetSlotId = slotId;
-    if (!targetSlotId) {
-      const primarySlot = await prisma.examSlot.findFirst({
-        where: { examId, slotNumber: 1 },
-      });
-      targetSlotId = primarySlot?.id;
+    // Determine target slot
+    let targetSlotId: string | null = null;
+    if (slotId && UUID_REGEX.test(slotId)) {
+      const matchedSlot = exam.slots.find((s) => s.id === slotId);
+      if (matchedSlot) {
+        targetSlotId = matchedSlot.id;
+      }
+    }
+
+    if (!targetSlotId && exam.slots.length > 0) {
+      // Default to primary slot (slotNumber: 1 or first available slot)
+      const primarySlot = exam.slots.find((s) => s.slotNumber === 1) || exam.slots[0];
+      targetSlotId = primarySlot.id;
     }
 
     await prisma.examSession.create({
       data: {
         examId,
-        slotId: targetSlotId || null,
+        slotId: targetSlotId,
         studentId,
         status: "SCHEDULED",
         attendanceStatus: "NOT_REPORTED",
@@ -524,7 +720,7 @@ export async function enrollStudentInExamAction(
     return { success: true };
   } catch (error) {
     console.error("Error enrolling student:", error);
-    return { success: false, error: String(error) };
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
 
@@ -610,7 +806,7 @@ export async function getAdminOverviewData(): Promise<{
       prisma.examSession.findMany({
         include: {
           exam: {
-            select: { title: true, courseCode: true },
+            select: { id: true, title: true, courseCode: true },
           },
           slot: true,
           student: {
@@ -680,7 +876,7 @@ export async function getAdminOverviewData(): Promise<{
         reg_number: s.student.regNumber,
         department_code: s.student.department.code,
         department_name: s.student.department.name,
-        exam_id: s.exam.courseCode,
+        exam_id: s.exam.id,
         exam_title: s.exam.title,
         slot_id: s.slot?.id || null,
         slot_name: s.slot?.slotName || "Standard Slot",
@@ -724,27 +920,75 @@ export async function createExamAction(data: {
   anti_cheat_config: AntiCheatConfigInput;
 }) {
   try {
+    const title = data.title?.trim();
+    if (!title || title.length < 3) {
+      return { success: false, error: "Examination title must be at least 3 characters long." };
+    }
+    if (title.length > 255) {
+      return { success: false, error: "Examination title must not exceed 255 characters." };
+    }
+
+    const courseCode = data.course_code?.trim().toUpperCase();
+    if (!courseCode || !/^[A-Z0-9_-]{2,30}$/.test(courseCode)) {
+      return { success: false, error: "Course code must be 2-30 alphanumeric characters (e.g. PHD-2026-RET)." };
+    }
+
+    // Check duplicate course code
+    const existingExam = await prisma.exam.findFirst({
+      where: { courseCode },
+      select: { id: true },
+    });
+    if (existingExam) {
+      return { success: false, error: `An examination with course code "${courseCode}" already exists.` };
+    }
+
+    const duration = Number(data.duration_minutes);
+    if (isNaN(duration) || duration < 15 || duration > 720) {
+      return { success: false, error: "Duration must be between 15 and 720 minutes." };
+    }
+
+    const totalMarks = Number(data.total_marks);
+    if (isNaN(totalMarks) || totalMarks <= 0 || totalMarks > 1000) {
+      return { success: false, error: "Total marks must be a positive number up to 1000." };
+    }
+
+    const passingMarks = Number(data.passing_marks);
+    if (isNaN(passingMarks) || passingMarks <= 0 || passingMarks > totalMarks) {
+      return { success: false, error: "Passing threshold must be between 1 and the total marks." };
+    }
+
     const startTime = new Date(data.start_time);
     const endTime = new Date(data.end_time);
+    if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+      return { success: false, error: "Invalid start or end date provided." };
+    }
+    if (startTime >= endTime) {
+      return { success: false, error: "Examination end time must be after the start time." };
+    }
+
     const loginOpensAt = data.login_opens_at 
       ? new Date(data.login_opens_at)
       : new Date(startTime.getTime() - 15 * 60 * 1000); // 15 mins before
     
-    const joinWindowMinutes = data.join_window_minutes || 15;
+    if (isNaN(loginOpensAt.getTime()) || loginOpensAt > startTime) {
+      return { success: false, error: "Check-in window must open at or before the exam start time." };
+    }
+
+    const joinWindowMinutes = Number(data.join_window_minutes) || 15;
     const joinWindowClosesAt = new Date(startTime.getTime() + joinWindowMinutes * 60 * 1000);
 
     // Create Exam and initial primary Slot 1 atomically
     const exam = await prisma.$transaction(async (tx) => {
       const createdExam = await tx.exam.create({
         data: {
-          title: data.title,
-          courseCode: data.course_code.toUpperCase(),
-          description: data.description,
-          durationMinutes: data.duration_minutes,
-          totalMarks: data.total_marks,
-          passingMarks: data.passing_marks,
-          startTime: startTime,
-          endTime: endTime,
+          title,
+          courseCode,
+          description: data.description?.trim() || "",
+          durationMinutes: duration,
+          totalMarks,
+          passingMarks,
+          startTime,
+          endTime,
           antiCheatConfig: data.anti_cheat_config as object,
           isPublished: false,
         },
@@ -772,22 +1016,42 @@ export async function createExamAction(data: {
     return { success: true, examId: exam.id };
   } catch (error) {
     console.error("Error creating exam:", error);
-    return { success: false, error: String(error) };
+    return { success: false, error: "Database error while creating examination schedule." };
   }
 }
 
 export async function toggleExamPublishAction(id: string, isPublished: boolean) {
   try {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!id || !UUID_REGEX.test(id)) {
+      return { success: false, error: "Invalid examination ID." };
+    }
+
+    // If publishing, ensure exam exists and has slots
+    if (!isPublished) {
+      const exam = await prisma.exam.findUnique({
+        where: { id },
+        include: { _count: { select: { slots: true } } },
+      });
+      if (!exam) {
+        return { success: false, error: "Examination not found." };
+      }
+      if (exam._count.slots === 0) {
+        return { success: false, error: "Cannot publish: examination must have at least one timing slot scheduled." };
+      }
+    }
+
     await prisma.exam.update({
       where: { id },
       data: { isPublished: !isPublished },
     });
+
     revalidatePath("/admin");
     revalidatePath("/admin/exams");
     return { success: true };
   } catch (error) {
     console.error("Error toggling publish:", error);
-    return { success: false, error: String(error) };
+    return { success: false, error: "Database error updating examination publish status." };
   }
 }
 
@@ -806,15 +1070,52 @@ export async function updateExamAction(
   }
 ) {
   try {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!id || !UUID_REGEX.test(id)) {
+      return { success: false, error: "Invalid examination ID." };
+    }
+
+    const title = data.title?.trim();
+    if (!title || title.length < 3) {
+      return { success: false, error: "Examination title must be at least 3 characters long." };
+    }
+
+    const courseCode = data.course_code?.trim().toUpperCase();
+    if (!courseCode || !/^[A-Z0-9_-]{2,30}$/.test(courseCode)) {
+      return { success: false, error: "Course code must be 2-30 alphanumeric characters." };
+    }
+
+    const existingWithCode = await prisma.exam.findFirst({
+      where: {
+        courseCode,
+        NOT: { id },
+      },
+      select: { id: true },
+    });
+    if (existingWithCode) {
+      return { success: false, error: `Course code "${courseCode}" is already in use by another examination.` };
+    }
+
+    const duration = Number(data.duration_minutes);
+    if (isNaN(duration) || duration < 15 || duration > 720) {
+      return { success: false, error: "Duration must be between 15 and 720 minutes." };
+    }
+
+    const totalMarks = Number(data.total_marks);
+    const passingMarks = Number(data.passing_marks);
+    if (isNaN(totalMarks) || totalMarks <= 0 || isNaN(passingMarks) || passingMarks <= 0 || passingMarks > totalMarks) {
+      return { success: false, error: "Passing marks must be between 1 and total marks." };
+    }
+
     await prisma.exam.update({
       where: { id },
       data: {
-        title: data.title,
-        courseCode: data.course_code.toUpperCase().trim(),
-        description: data.description,
-        durationMinutes: data.duration_minutes,
-        totalMarks: data.total_marks,
-        passingMarks: data.passing_marks,
+        title,
+        courseCode,
+        description: data.description?.trim() || "",
+        durationMinutes: duration,
+        totalMarks,
+        passingMarks,
         ...(data.start_time ? { startTime: new Date(data.start_time) } : {}),
         ...(data.end_time ? { endTime: new Date(data.end_time) } : {}),
         antiCheatConfig: data.anti_cheat_config as object,
@@ -826,24 +1127,45 @@ export async function updateExamAction(
     return { success: true };
   } catch (error) {
     console.error("Error updating exam:", error);
-    return { success: false, error: String(error) };
+    return { success: false, error: "Database error updating examination details." };
   }
 }
 
 export async function deleteExamAction(id: string) {
   try {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!id || !UUID_REGEX.test(id)) {
+      return { success: false, error: "Invalid examination ID." };
+    }
+
+    // Safety guard: prevent accidental deletion if candidate sessions exist
+    const sessionCount = await prisma.examSession.count({
+      where: { examId: id },
+    });
+    if (sessionCount > 0) {
+      return {
+        success: false,
+        error: `Cannot delete examination: ${sessionCount} scholar session(s) are currently enrolled or recorded. Please remove session records first.`,
+      };
+    }
+
     await prisma.exam.delete({ where: { id } });
     revalidatePath("/admin");
     revalidatePath("/admin/exams");
     return { success: true };
   } catch (error) {
     console.error("Error deleting exam:", error);
-    return { success: false, error: String(error) };
+    return { success: false, error: "Database error while deleting examination." };
   }
 }
 
 export async function getExamSlotsAction(examId: string): Promise<SerializedSlot[]> {
   try {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!examId || !UUID_REGEX.test(examId)) {
+      return [];
+    }
+
     const slots = await prisma.examSlot.findMany({
       where: { examId },
       include: {
@@ -884,6 +1206,29 @@ export async function createExamSlotAction(data: {
   is_retest_slot?: boolean;
 }) {
   try {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!data.exam_id || !UUID_REGEX.test(data.exam_id)) {
+      return { success: false, error: "Invalid examination ID." };
+    }
+
+    const slotName = data.slot_name?.trim();
+    if (!slotName) {
+      return { success: false, error: "Slot name cannot be empty." };
+    }
+
+    const loginOpensAt = new Date(data.login_opens_at);
+    const startTime = new Date(data.start_time);
+    const joinWindowClosesAt = new Date(data.join_window_closes_at);
+    const endTime = new Date(data.end_time);
+
+    if (isNaN(loginOpensAt.getTime()) || isNaN(startTime.getTime()) || isNaN(joinWindowClosesAt.getTime()) || isNaN(endTime.getTime())) {
+      return { success: false, error: "Invalid date or time provided for slot window." };
+    }
+
+    if (startTime >= endTime) {
+      return { success: false, error: "Slot end time must be after the start time." };
+    }
+
     const count = await prisma.examSlot.count({ where: { examId: data.exam_id } });
     const slotNumber = count + 1;
 
@@ -891,11 +1236,11 @@ export async function createExamSlotAction(data: {
       data: {
         examId: data.exam_id,
         slotNumber,
-        slotName: data.slot_name.trim(),
-        loginOpensAt: new Date(data.login_opens_at),
-        startTime: new Date(data.start_time),
-        joinWindowClosesAt: new Date(data.join_window_closes_at),
-        endTime: new Date(data.end_time),
+        slotName,
+        loginOpensAt,
+        startTime,
+        joinWindowClosesAt,
+        endTime,
         status: "SCHEDULED",
         isRetestSlot: data.is_retest_slot ?? false,
       },
@@ -905,7 +1250,7 @@ export async function createExamSlotAction(data: {
     return { success: true, slotId: slot.id };
   } catch (error) {
     console.error("Error creating slot:", error);
-    return { success: false, error: String(error) };
+    return { success: false, error: "Database error while creating timing slot." };
   }
 }
 
@@ -921,6 +1266,11 @@ export async function updateExamSlotAction(
   }
 ) {
   try {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!slotId || !UUID_REGEX.test(slotId)) {
+      return { success: false, error: "Invalid slot ID." };
+    }
+
     await prisma.examSlot.update({
       where: { id: slotId },
       data: {
@@ -938,18 +1288,28 @@ export async function updateExamSlotAction(
     return { success: true };
   } catch (error) {
     console.error("Error updating slot:", error);
-    return { success: false, error: String(error) };
+    return { success: false, error: "Database error while updating timing slot." };
   }
 }
 
 export async function deleteExamSlotAction(slotId: string) {
   try {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!slotId || !UUID_REGEX.test(slotId)) {
+      return { success: false, error: "Invalid slot ID." };
+    }
+
+    const sessionCount = await prisma.examSession.count({ where: { slotId } });
+    if (sessionCount > 0) {
+      return { success: false, error: `Cannot delete slot: ${sessionCount} scholar(s) are assigned to this session window.` };
+    }
+
     await prisma.examSlot.delete({ where: { id: slotId } });
     revalidatePath("/admin/exams");
     return { success: true };
   } catch (error) {
     console.error("Error deleting slot:", error);
-    return { success: false, error: String(error) };
+    return { success: false, error: "Database error while deleting timing slot." };
   }
 }
 
@@ -962,11 +1322,16 @@ export async function getQuestionsForExamAction(
   filters?: { scope?: QuestionScope; departmentId?: string }
 ): Promise<SerializedQuestion[]> {
   try {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!examId || !UUID_REGEX.test(examId)) {
+      return [];
+    }
+
     const where: Record<string, unknown> = { examId };
     if (filters?.scope) {
       where.scope = filters.scope;
     }
-    if (filters?.departmentId) {
+    if (filters?.departmentId && UUID_REGEX.test(filters.departmentId)) {
       where.departmentId = filters.departmentId;
     }
 
@@ -1012,15 +1377,84 @@ export async function createQuestionAction(data: {
   negative_marks: number;
 }) {
   try {
-    const scope = data.scope || "COMMON";
-    const departmentId = scope === "COMMON" ? null : data.department_id || null;
-    const sectionName = data.section_name || (scope === "COMMON" ? "Part A: General & Research Aptitude" : "Part B: Department Specialization");
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!data.exam_id || !UUID_REGEX.test(data.exam_id)) {
+      return { success: false, error: "Invalid or missing examination identifier." };
+    }
+
+    const examExists = await prisma.exam.findUnique({
+      where: { id: data.exam_id },
+      select: { id: true },
+    });
+    if (!examExists) {
+      return { success: false, error: "The targeted examination was not found in the database." };
+    }
+
+    const questionText = data.question_text?.trim();
+    if (!questionText || questionText.length < 5) {
+      return { success: false, error: "Question prompt text must be at least 5 characters." };
+    }
+    if (questionText.length > 10000) {
+      return { success: false, error: "Question prompt text is too long (maximum 10,000 characters)." };
+    }
+
+    if (!Array.isArray(data.options) || data.options.length < 2) {
+      return { success: false, error: "A question must contain at least 2 options." };
+    }
+
+    const cleanOptions = data.options.map((opt) => ({
+      id: String(opt.id || "").trim().toLowerCase(),
+      text: String(opt.text || "").trim(),
+    })).filter((opt) => opt.id.length > 0 && opt.text.length > 0);
+
+    if (cleanOptions.length < 2) {
+      return { success: false, error: "All options must have non-empty text and valid keys." };
+    }
+
+    const optionIds = new Set(cleanOptions.map((o) => o.id));
+    if (optionIds.size !== cleanOptions.length) {
+      return { success: false, error: "Option identifiers (A, B, C, etc.) must be unique." };
+    }
+
+    const cleanCorrect = (data.correct_answers || [])
+      .map((ans) => String(ans).trim().toLowerCase())
+      .filter((ans) => optionIds.has(ans));
+
+    if (cleanCorrect.length === 0) {
+      return { success: false, error: "At least one correct answer must be assigned to the options." };
+    }
+
+    const marks = Number(data.marks);
+    if (isNaN(marks) || marks <= 0 || marks > 100) {
+      return { success: false, error: "Marks must be a positive number between 1 and 100." };
+    }
+
+    const negativeMarks = Number(data.negative_marks);
+    if (isNaN(negativeMarks) || negativeMarks < 0 || negativeMarks > marks) {
+      return { success: false, error: "Negative marking penalty must be between 0 and the total question marks." };
+    }
+
+    const scope = data.scope === "DEPARTMENT_SPECIFIC" ? "DEPARTMENT_SPECIFIC" : "COMMON";
+    let departmentId: string | null = null;
+    if (scope === "DEPARTMENT_SPECIFIC") {
+      if (!data.department_id || !UUID_REGEX.test(data.department_id)) {
+        return { success: false, error: "Department-specific questions must specify an academic department." };
+      }
+      const deptExists = await prisma.department.findUnique({
+        where: { id: data.department_id },
+        select: { id: true },
+      });
+      if (!deptExists) {
+        return { success: false, error: "Selected academic department not found in database." };
+      }
+      departmentId = data.department_id;
+    }
+
+    const sectionName = data.section_name?.trim() || (scope === "COMMON" ? "Part A: General & Research Aptitude" : "Part B: Department Specialization");
 
     const count = await prisma.question.count({ 
       where: { 
         examId: data.exam_id, 
-        scope, 
-        departmentId 
       } 
     });
 
@@ -1030,12 +1464,12 @@ export async function createQuestionAction(data: {
         scope,
         departmentId,
         sectionName,
-        questionText: data.question_text,
-        questionType: data.question_type,
-        options: data.options as object,
-        correctAnswers: data.correct_answers as object,
-        marks: data.marks,
-        negativeMarks: data.negative_marks,
+        questionText,
+        questionType: data.question_type || "MCQ",
+        options: cleanOptions as object,
+        correctAnswers: cleanCorrect as object,
+        marks,
+        negativeMarks,
         orderIndex: count + 1,
       },
     });
@@ -1044,18 +1478,23 @@ export async function createQuestionAction(data: {
     return { success: true };
   } catch (error) {
     console.error("Error creating question:", error);
-    return { success: false, error: String(error) };
+    return { success: false, error: "Database error while creating question item." };
   }
 }
 
 export async function deleteQuestionAction(id: string) {
   try {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!id || !UUID_REGEX.test(id)) {
+      return { success: false, error: "Invalid question ID format." };
+    }
+
     await prisma.question.delete({ where: { id } });
     revalidatePath("/admin/questions");
     return { success: true };
   } catch (error) {
     console.error("Error deleting question:", error);
-    return { success: false, error: String(error) };
+    return { success: false, error: "Unable to delete question. It may have already been removed." };
   }
 }
 
@@ -1075,9 +1514,40 @@ export async function updateQuestionAction(
   }
 ) {
   try {
-    const scope = data.scope || "COMMON";
-    const departmentId = scope === "COMMON" ? null : data.department_id || null;
-    const sectionName = data.section_name || (scope === "COMMON" ? "Part A: General & Research Aptitude" : "Part B: Department Specialization");
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!id || !UUID_REGEX.test(id)) {
+      return { success: false, error: "Invalid question ID format." };
+    }
+
+    const questionText = data.question_text?.trim();
+    if (!questionText || questionText.length < 5) {
+      return { success: false, error: "Question prompt text must be at least 5 characters." };
+    }
+
+    if (!Array.isArray(data.options) || data.options.length < 2) {
+      return { success: false, error: "At least 2 options are required." };
+    }
+
+    const cleanOptions = data.options.map((opt) => ({
+      id: String(opt.id || "").trim().toLowerCase(),
+      text: String(opt.text || "").trim(),
+    })).filter((opt) => opt.id.length > 0 && opt.text.length > 0);
+
+    const optionIds = new Set(cleanOptions.map((o) => o.id));
+    const cleanCorrect = (data.correct_answers || [])
+      .map((ans) => String(ans).trim().toLowerCase())
+      .filter((ans) => optionIds.has(ans));
+
+    if (cleanCorrect.length === 0) {
+      return { success: false, error: "At least one correct answer must be selected." };
+    }
+
+    const scope = data.scope === "DEPARTMENT_SPECIFIC" ? "DEPARTMENT_SPECIFIC" : "COMMON";
+    let departmentId: string | null = null;
+    if (scope === "DEPARTMENT_SPECIFIC" && data.department_id && UUID_REGEX.test(data.department_id)) {
+      departmentId = data.department_id;
+    }
+    const sectionName = data.section_name?.trim() || (scope === "COMMON" ? "Part A: General & Research Aptitude" : "Part B: Department Specialization");
 
     await prisma.question.update({
       where: { id },
@@ -1085,13 +1555,13 @@ export async function updateQuestionAction(
         scope,
         departmentId,
         sectionName,
-        questionText: data.question_text,
-        questionType: data.question_type,
-        options: data.options as object,
-        correctAnswers: data.correct_answers as object,
-        marks: data.marks,
-        negativeMarks: data.negative_marks,
-        explanation: data.explanation || null,
+        questionText,
+        questionType: data.question_type || "MCQ",
+        options: cleanOptions as object,
+        correctAnswers: cleanCorrect as object,
+        marks: Number(data.marks) || 1,
+        negativeMarks: Number(data.negative_marks) || 0,
+        explanation: data.explanation?.trim() || null,
       },
     });
 
@@ -1099,7 +1569,7 @@ export async function updateQuestionAction(
     return { success: true };
   } catch (error) {
     console.error("Error updating question:", error);
-    return { success: false, error: String(error) };
+    return { success: false, error: "Database error while updating question item." };
   }
 }
 
@@ -1119,47 +1589,94 @@ export async function bulkImportQuestionsAction(
   }>
 ) {
   try {
-    const depts = await prisma.department.findMany();
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!examId || !UUID_REGEX.test(examId)) {
+      return { success: false, error: "Invalid examination ID.", count: 0 };
+    }
+
+    const examExists = await prisma.exam.findUnique({
+      where: { id: examId },
+      select: { id: true },
+    });
+    if (!examExists) {
+      return { success: false, error: "Examination does not exist in database.", count: 0 };
+    }
+
+    if (!Array.isArray(questions) || questions.length === 0) {
+      return { success: false, error: "Question list cannot be empty.", count: 0 };
+    }
+
+    const depts = await prisma.department.findMany({ select: { id: true, code: true } });
     const deptMap: Record<string, string> = {};
     for (const d of depts) {
       deptMap[d.code.toUpperCase()] = d.id;
     }
 
     const currentCount = await prisma.question.count({ where: { examId } });
-    let inserted = 0;
 
+    const rowsToInsert = [];
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
-      const scope = q.scope || "COMMON";
+      const text = String(q.question_text || "").trim();
+      if (!text) continue;
+
+      const rawOpts = Array.isArray(q.options) ? q.options : [];
+      const cleanOpts = rawOpts
+        .map((opt) => ({
+          id: String(opt.id || "").trim().toLowerCase(),
+          text: String(opt.text || "").trim(),
+        }))
+        .filter((opt) => opt.id && opt.text);
+
+      if (cleanOpts.length < 2) continue;
+
+      const optIds = new Set(cleanOpts.map((o) => o.id));
+      const cleanCorrect = (Array.isArray(q.correct_answers) ? q.correct_answers : ["a"])
+        .map((ans) => String(ans).trim().toLowerCase())
+        .filter((ans) => optIds.has(ans));
+
+      if (cleanCorrect.length === 0) {
+        cleanCorrect.push(cleanOpts[0].id);
+      }
+
+      const scope: QuestionScope = q.scope === "DEPARTMENT_SPECIFIC" ? "DEPARTMENT_SPECIFIC" : "COMMON";
       let departmentId: string | null = null;
       if (scope === "DEPARTMENT_SPECIFIC" && q.department_code) {
         departmentId = deptMap[q.department_code.toUpperCase()] || null;
       }
 
-      await prisma.question.create({
-        data: {
-          examId,
-          scope,
-          departmentId,
-          sectionName: q.section_name || (scope === "COMMON" ? "Part A: General & Research Aptitude" : "Part B: Department Specialization"),
-          questionText: q.question_text,
-          questionType: q.question_type || "MCQ",
-          options: q.options as object,
-          correctAnswers: q.correct_answers as object,
-          marks: q.marks,
-          negativeMarks: q.negative_marks ?? 0,
-          explanation: q.explanation || null,
-          orderIndex: currentCount + i + 1,
-        },
+      const marks = Number(q.marks) > 0 ? Number(q.marks) : 4;
+      const negativeMarks = Number(q.negative_marks) >= 0 ? Number(q.negative_marks) : 0;
+
+      rowsToInsert.push({
+        examId,
+        scope,
+        departmentId,
+        sectionName: q.section_name || (scope === "COMMON" ? "Part A: General & Research Aptitude" : "Part B: Department Specialization"),
+        questionText: text,
+        questionType: (q.question_type as QuestionType) || "MCQ",
+        options: cleanOpts as object,
+        correctAnswers: cleanCorrect as object,
+        marks,
+        negativeMarks,
+        explanation: q.explanation || null,
+        orderIndex: currentCount + rowsToInsert.length + 1,
       });
-      inserted++;
     }
 
+    if (rowsToInsert.length === 0) {
+      return { success: false, error: "No valid questions were parsed from the input.", count: 0 };
+    }
+
+    const result = await prisma.question.createMany({
+      data: rowsToInsert,
+    });
+
     revalidatePath("/admin/questions");
-    return { success: true, count: inserted };
+    return { success: true, count: result.count };
   } catch (error) {
     console.error("Error bulk importing questions:", error);
-    return { success: false, error: String(error), count: 0 };
+    return { success: false, error: "Database error during bulk question import.", count: 0 };
   }
 }
 
@@ -1169,8 +1686,26 @@ export async function bulkImportQuestionsAction(
 
 export async function getAttendanceOverviewAction(examId: string, slotId?: string) {
   try {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!examId || !UUID_REGEX.test(examId)) {
+      return {
+        success: true,
+        counts: {
+          total: 0,
+          not_reported: 0,
+          logged_in: 0,
+          in_exam: 0,
+          submitted: 0,
+          absent: 0,
+          disqualified: 0,
+          technical_failure: 0,
+        },
+        candidates: [],
+      };
+    }
+
     const where: Record<string, unknown> = { examId };
-    if (slotId) {
+    if (slotId && UUID_REGEX.test(slotId)) {
       where.slotId = slotId;
     }
 
@@ -1222,11 +1757,30 @@ export async function getAttendanceOverviewAction(examId: string, slotId?: strin
 
 export async function updateCandidateAttendanceAction(sessionId: string, status: AttendanceStatus) {
   try {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!sessionId || !UUID_REGEX.test(sessionId)) {
+      return { success: false, error: "Invalid session UUID" };
+    }
+
+    const validStatuses: AttendanceStatus[] = [
+      "NOT_REPORTED",
+      "LOGGED_IN",
+      "IN_EXAM",
+      "SUBMITTED",
+      "ABSENT",
+      "TECHNICAL_FAILURE",
+      "DISQUALIFIED",
+    ];
+    if (!validStatuses.includes(status)) {
+      return { success: false, error: `Invalid attendance status: ${status}` };
+    }
+
     await prisma.examSession.update({
       where: { id: sessionId },
       data: { 
         attendanceStatus: status,
-        status: status === "SUBMITTED" ? "SUBMITTED" : status === "DISQUALIFIED" ? "DISQUALIFIED" : status === "ABSENT" ? "ABSENT" : undefined,
+        status: status === "SUBMITTED" ? "SUBMITTED" : status === "DISQUALIFIED" ? "DISQUALIFIED" : status === "ABSENT" ? "ABSENT" : status === "IN_EXAM" ? "IN_PROGRESS" : undefined,
+        ...(status === "IN_EXAM" ? { startedAt: new Date() } : {}),
       },
     });
 
@@ -1246,11 +1800,16 @@ export async function bulkUpdateAttendanceAction(
   toStatus: AttendanceStatus
 ) {
   try {
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!examId || !UUID_REGEX.test(examId)) {
+      return { success: false, error: "Invalid examination UUID", count: 0 };
+    }
+
     const where: Record<string, unknown> = {
       examId,
       attendanceStatus: fromStatus,
     };
-    if (slotId) {
+    if (slotId && UUID_REGEX.test(slotId)) {
       where.slotId = slotId;
     }
 
@@ -1267,7 +1826,7 @@ export async function bulkUpdateAttendanceAction(
     return { success: true, count: updated.count };
   } catch (error) {
     console.error("Error bulk updating attendance:", error);
-    return { success: false, error: String(error) };
+    return { success: false, error: String(error), count: 0 };
   }
 }
 

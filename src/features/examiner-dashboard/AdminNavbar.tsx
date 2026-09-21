@@ -47,15 +47,15 @@ export function AdminNavbar({ title }: AdminNavbarProps) {
   }, []);
 
   const getRouteMeta = (path: string) => {
-    if (path === "/admin") return { name: "Dashboard Overview", icon: LayoutDashboard, category: "Overview" };
-    if (path.startsWith("/admin/departments")) return { name: "Academic Departments", icon: Building2, category: "Academics" };
-    if (path.startsWith("/admin/candidates")) return { name: "Candidate Registry", icon: Users, category: "Students" };
-    if (path.startsWith("/admin/exams")) return { name: "Exams & Schedules", icon: BookOpenCheck, category: "Exams" };
-    if (path.startsWith("/admin/questions")) return { name: "Question Bank", icon: HelpCircle, category: "Exams" };
-    if (path.startsWith("/admin/attendance")) return { name: "Student Attendance", icon: UserCheck, category: "Exams" };
-    if (path.startsWith("/admin/results")) return { name: "Results & Marks", icon: Award, category: "Evaluation" };
-    if (path.startsWith("/admin/second-slot")) return { name: "Re-Exam / Second Slot", icon: RefreshCw, category: "Retests" };
-    if (path.startsWith("/admin/proctor")) return { name: "Live Exam Monitoring", icon: ShieldAlert, category: "Monitoring" };
+    if (path === "/admin") return { name: "Dashboard Overview", icon: LayoutDashboard, category: "Command Center" };
+    if (path.startsWith("/admin/departments")) return { name: "Academic Departments", icon: Building2, category: "Pre-Exam Setup" };
+    if (path.startsWith("/admin/candidates")) return { name: "Candidate Registry", icon: Users, category: "Pre-Exam Setup" };
+    if (path.startsWith("/admin/questions")) return { name: "Question Bank", icon: HelpCircle, category: "Pre-Exam Setup" };
+    if (path.startsWith("/admin/exams")) return { name: "Exams & Schedules", icon: BookOpenCheck, category: "Pre-Exam Setup" };
+    if (path.startsWith("/admin/attendance")) return { name: "Student Attendance", icon: UserCheck, category: "Live Operations" };
+    if (path.startsWith("/admin/proctor")) return { name: "Live Exam Monitoring", icon: ShieldAlert, category: "Live Operations" };
+    if (path.startsWith("/admin/second-slot")) return { name: "Re-Exam / Second Slot", icon: RefreshCw, category: "Evaluation & Retests" };
+    if (path.startsWith("/admin/results")) return { name: "Results & Marks", icon: Award, category: "Evaluation & Retests" };
     return { name: "Exam Portal", icon: Layers, category: "Admin" };
   };
 

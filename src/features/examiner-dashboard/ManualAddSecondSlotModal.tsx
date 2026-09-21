@@ -19,18 +19,25 @@ export function ManualAddSecondSlotModal({
   onClose,
   onSuccess,
 }: ManualAddSecondSlotModalProps) {
-  const [selectedStudentId, setSelectedStudentId] = useState(students[0]?.id || "");
+  const [selectedStudentId, setSelectedStudentId] = useState("");
   const [reason, setReason] = useState("Dean Approved / Medical Exception");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
+  const effectiveStudentId = selectedStudentId && students.some((s) => s.id === selectedStudentId)
+    ? selectedStudentId
+    : students[0]?.id || "";
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedStudentId || !examId) return;
+    if (!effectiveStudentId || !examId) {
+      alert("Please select a scholar and an active examination.");
+      return;
+    }
 
     setIsSubmitting(true);
-    const res = await manualAddCandidateToSecondSlotAction(examId, selectedStudentId, reason);
+    const res = await manualAddCandidateToSecondSlotAction(examId, effectiveStudentId, reason);
     setIsSubmitting(false);
 
     if (res.success) {
@@ -68,7 +75,7 @@ export function ManualAddSecondSlotModal({
           <div>
             <label className="font-bold text-slate-700 block mb-1">Select Research Scholar</label>
             <select
-              value={selectedStudentId}
+              value={effectiveStudentId}
               onChange={(e) => setSelectedStudentId(e.target.value)}
               className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white font-medium text-slate-800"
             >

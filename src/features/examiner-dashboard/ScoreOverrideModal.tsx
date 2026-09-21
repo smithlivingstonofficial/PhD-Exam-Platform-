@@ -23,10 +23,18 @@ export function ScoreOverrideModal({
   onClose,
   onOverrideSuccess,
 }: ScoreOverrideModalProps) {
+  const [prevSessionId, setPrevSessionId] = useState(sessionId);
   const [newScore, setNewScore] = useState<number>(currentScore ?? 0);
   const [isPassed, setIsPassed] = useState<boolean>(currentPassed ?? false);
   const [remark, setRemark] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  if (sessionId !== prevSessionId) {
+    setPrevSessionId(sessionId);
+    setNewScore(currentScore ?? 0);
+    setIsPassed(currentPassed ?? false);
+    setRemark("");
+  }
 
   if (!isOpen || !sessionId) return null;
 

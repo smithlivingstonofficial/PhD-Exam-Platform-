@@ -524,7 +524,7 @@ export function ExamViewport({
       </div>
 
       {/* 3. MAIN WORKSTATION: SPLIT 2-COLUMN VIEWPORT (Takes remaining 100vh) */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className={`flex-1 flex overflow-hidden select-none transition-all duration-300 ${!isFullscreen && !isLoading ? "blur-lg pointer-events-none filter" : ""}`}>
         {/* Left Column: Focused Question Canvas (72% width) */}
         <main className="flex-1 flex flex-col justify-between p-5 md:p-6 bg-white overflow-y-auto border-r border-slate-200/80">
           {currentQuestion ? (

@@ -13,6 +13,13 @@ interface QuestionPreviewModalProps {
 export function QuestionPreviewModal({ isOpen, question, onClose }: QuestionPreviewModalProps) {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [showAnswer, setShowAnswer] = useState(false);
+  const [prevQuestionId, setPrevQuestionId] = useState<string | null>(null);
+
+  if (question && question.id !== prevQuestionId) {
+    setPrevQuestionId(question.id);
+    setSelectedOption(null);
+    setShowAnswer(false);
+  }
 
   if (!isOpen || !question) return null;
 

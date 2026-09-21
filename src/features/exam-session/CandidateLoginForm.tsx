@@ -2,7 +2,18 @@
 
 import { useState } from "react";
 import { candidateLoginAction, CandidateSessionPayload } from "./actions";
-import { GraduationCap, ShieldCheck, ArrowRight, Lock, KeyRound, AlertCircle, Sparkles } from "lucide-react";
+import { 
+  GraduationCap, 
+  ShieldCheck, 
+  ArrowRight, 
+  Lock, 
+  KeyRound, 
+  AlertCircle, 
+  Sparkles,
+  Eye,
+  EyeOff,
+  Info
+} from "lucide-react";
 
 interface CandidateLoginFormProps {
   onLoginSuccess: (payload: CandidateSessionPayload) => void;
@@ -11,33 +22,36 @@ interface CandidateLoginFormProps {
 export function CandidateLoginForm({ onLoginSuccess }: CandidateLoginFormProps) {
   const [regNumber, setRegNumber] = useState("");
   const [accessCode, setAccessCode] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!regNumber.trim() || !accessCode.trim()) return;
+    if (!regNumber.trim() || !accessCode.trim()) {
+      setErrorMsg("Please enter both your Registration Number and Access PIN.");
+      return;
+    }
 
     setIsLoading(true);
     setErrorMsg("");
 
-    const res = await candidateLoginAction({
-      regNumber: regNumber.trim(),
-      accessCode: accessCode.trim(),
-    });
+    try {
+      const res = await candidateLoginAction({
+        regNumber: regNumber.trim().toUpperCase(),
+        accessCode: accessCode.trim(),
+      });
 
-    setIsLoading(false);
-
-    if (res.success && res.payload) {
-      onLoginSuccess(res.payload);
-    } else {
-      setErrorMsg(res.error || "Authentication failed.");
+      if (res.success && res.payload) {
+        onLoginSuccess(res.payload);
+      } else {
+        setErrorMsg(res.error || "Authentication failed. Please check your credentials.");
+      }
+    } catch {
+      setErrorMsg("Unable to connect to examination server. Please check your network.");
+    } finally {
+      setIsLoading(false);
     }
-  };
-
-  const handleQuickDemo = (reg: string, pin: string) => {
-    setRegNumber(reg);
-    setAccessCode(pin);
   };
 
   return (
@@ -51,29 +65,34 @@ export function CandidateLoginForm({ onLoginSuccess }: CandidateLoginFormProps) 
           Doctoral Candidate Portal
         </h1>
         <p className="text-xs text-slate-500 max-w-xs mx-auto">
-          Official entrance & coursework examination console for Ph.D research scholars
+          Official entrance & coursework qualifying examination workstation for Ph.D research scholars
         </p>
       </div>
 
       {/* Main Login Card */}
-      <div className="p-7 rounded-3xl bg-white border border-slate-200/90 shadow-xl shadow-slate-100/60 space-y-5">
-        <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-          <ShieldCheck className="w-4 h-4 text-emerald-600" />
-          <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-            Secure Candidate Verification
+      <div className="p-7 rounded-3xl bg-white border border-slate-200 shadow-xl shadow-slate-100/60 space-y-5">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              Candidate Verification
+            </span>
+          </div>
+          <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+            Live Biometrics
           </span>
         </div>
 
         {errorMsg && (
-          <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2.5 animate-in fade-in">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>{errorMsg}</span>
+          <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2.5 animate-in fade-in">
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+            <span className="font-medium">{errorMsg}</span>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div>
-            <label className="block text-slate-700 font-semibold mb-1.5">
+            <label className="block text-slate-700 font-bold mb-1.5">
               Scholar Registration / Roll Number *
             </label>
             <div className="relative">
@@ -81,72 +100,69 @@ export function CandidateLoginForm({ onLoginSuccess }: CandidateLoginFormProps) 
               <input
                 type="text"
                 required
+                autoFocus
                 placeholder="e.g. PHD26-CSE-001"
                 value={regNumber}
                 onChange={(e) => setRegNumber(e.target.value.toUpperCase())}
                 className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono font-bold uppercase placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:bg-white transition-all text-xs"
               />
             </div>
+            <span className="text-[10px] text-slate-400 mt-1 block">
+              As issued on your official Doctoral Examination Admit Card
+            </span>
           </div>
 
           <div>
-            <label className="block text-slate-700 font-semibold mb-1.5">
+            <label className="block text-slate-700 font-bold mb-1.5">
               Examination Access PIN *
             </label>
             <div className="relative">
               <Lock className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 required
-                placeholder="6-digit examination PIN"
+                placeholder="6-digit examination access PIN"
                 value={accessCode}
                 onChange={(e) => setAccessCode(e.target.value)}
-                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono tracking-widest placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:bg-white transition-all text-xs"
+                className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono tracking-widest placeholder-slate-400 focus:outline-none focus:border-indigo-600 focus:bg-white transition-all text-xs"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-2.5 p-1 text-slate-400 hover:text-slate-600 rounded transition-colors"
+                title={showPassword ? "Hide PIN" : "Show PIN"}
+              >
+                {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
             </div>
           </div>
 
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all shadow-md shadow-indigo-600/20 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
           >
-            <span>{isLoading ? "Verifying Credentials..." : "Enter Examination Waiting Room"}</span>
+            <span>{isLoading ? "Verifying Credentials with University Server..." : "Enter Examination Waiting Room"}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
 
-        {/* Institutional Demo Credentials Helper */}
-        <div className="pt-3 border-t border-slate-100 space-y-2">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-            Demo Credentials (1-Click Fill):
-          </span>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => handleQuickDemo("PHD26-CSE-001", "998877")}
-              className="p-2 rounded-lg bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-left transition-colors text-[11px]"
-            >
-              <span className="font-bold text-slate-800 block">Ananya Sharma (CSE)</span>
-              <span className="font-mono text-[10px] text-slate-500">PHD26-CSE-001 • 998877</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickDemo("PHD26-MECH-001", "998877")}
-              className="p-2 rounded-lg bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 text-left transition-colors text-[11px]"
-            >
-              <span className="font-bold text-slate-800 block">Rahul Verma (MECH)</span>
-              <span className="font-mono text-[10px] text-slate-500">PHD26-MECH-001 • 998877</span>
-            </button>
+        {/* Guidance Note */}
+        <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-[11px] text-slate-600 space-y-1">
+          <div className="flex items-center gap-1.5 font-bold text-slate-700">
+            <Info className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+            <span>Admit Card & Invigilation Notice</span>
           </div>
+          <p className="text-[10px] text-slate-500 leading-relaxed">
+            Ensure your webcam and microphone are connected before signing in. The waiting room opens 15 minutes prior to the scheduled start time for biometric check-in.
+          </p>
         </div>
       </div>
 
       {/* Security Notice */}
       <div className="text-center text-[11px] text-slate-400 flex items-center justify-center gap-1.5">
         <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-        <span>Automated Continuous Audio & Visual Proctoring Enforced</span>
+        <span>Continuous Edge-AI Facial & Acoustic Monitoring Active</span>
       </div>
     </div>
   );

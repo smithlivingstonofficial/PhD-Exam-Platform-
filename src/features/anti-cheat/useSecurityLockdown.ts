@@ -67,7 +67,7 @@ export function useSecurityLockdown({
     [enabled, isDisqualified, maxStrikes, onStrike, sessionId]
   );
 
-  // 1. Fullscreen Change Handler
+  // 1. Fullscreen Change Handler (Zero Strikes, Silent Informational Audit Only)
   useEffect(() => {
     if (!enabled) return;
 
@@ -78,11 +78,18 @@ export function useSecurityLockdown({
       );
       setIsFullscreen(inFull);
 
+      // Fullscreen exit does NOT count as a strike - instead, FullscreenGuardModal
+      // blurs the entire viewport and prompts candidate to return.
       if (!inFull && !isDisqualifiedRef.current) {
-        registerViolation(
-          "FULLSCREEN_EXIT_DETECTED",
-          "Candidate exited mandatory fullscreen examination mode."
-        );
+        recordCandidateViolationAction({
+          sessionId,
+          eventType: "FULLSCREEN_EXIT_PROMPT",
+          severity: "LOW",
+          details: {
+            reason: "Candidate exited fullscreen. Exam screen blurred until re-entered.",
+            timestamp: new Date().toISOString(),
+          },
+        }).catch((err) => console.error("Fullscreen exit audit logging error:", err));
       }
     };
 
@@ -93,7 +100,7 @@ export function useSecurityLockdown({
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
       document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
     };
-  }, [enabled, registerViolation]);
+  }, [enabled, sessionId]);
 
   // 2. Tab-Switch / Page Visibility Handler
   useEffect(() => {
@@ -109,7 +116,8 @@ export function useSecurityLockdown({
     };
 
     const handleWindowBlur = () => {
-      if (!isDisqualifiedRef.current) {
+      // Only fire window blur if currently in fullscreen to prevent duplicate strikes when guard modal is active
+      if (!isDisqualifiedRef.current && isFullscreen) {
         registerViolation(
           "WINDOW_BLUR_DETECTED",
           "Candidate navigated away from the active examination window."
@@ -124,9 +132,9 @@ export function useSecurityLockdown({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleWindowBlur);
     };
-  }, [enabled, registerViolation]);
+  }, [enabled, isFullscreen, registerViolation]);
 
-  // 3. Peripheral Lockdown: Disable Keyboard DevTools Shortcuts & Clipboard
+  // 3. Peripheral Lockdown: Disable Keyboard DevTools Shortcuts, Clipboard, Drag & Drop & PrintScreen
   useEffect(() => {
     if (!enabled) return;
 
@@ -138,14 +146,27 @@ export function useSecurityLockdown({
         return;
       }
 
-      // Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C (Inspect/Console)
-      if (
-        (e.ctrlKey || e.metaKey) &&
-        e.shiftKey &&
-        ["I", "J", "C"].includes(e.key.toUpperCase())
-      ) {
+      // PrintScreen Key - Clear clipboard and prevent screenshot scraping
+      if (e.key === "PrintScreen") {
         e.preventDefault();
-        registerViolation("DEVTOOLS_SHORTCUT_INSPECT", "DevTools shortcut Ctrl+Shift+I/J/C pressed.");
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText("");
+          }
+        } catch {
+          // Clipboard write may fail if document focus is lost; safe to ignore
+        }
+        return;
+      }
+
+      // DevTools Inspection: Windows (Ctrl+Shift+I/J/C) & macOS (Cmd+Alt+I/J/C or Cmd+Shift+I/J/C)
+      const isDevToolsInspect =
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && ["I", "J", "C"].includes(e.key.toUpperCase())) ||
+        (e.metaKey && e.altKey && ["I", "J", "C"].includes(e.key.toUpperCase()));
+
+      if (isDevToolsInspect) {
+        e.preventDefault();
+        registerViolation("DEVTOOLS_SHORTCUT_INSPECT", "DevTools shortcut pressed.");
         return;
       }
 
@@ -185,11 +206,21 @@ export function useSecurityLockdown({
       e.preventDefault();
     };
 
+    const handleDragStart = (e: DragEvent) => {
+      e.preventDefault();
+    };
+
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+    };
+
     window.addEventListener("keydown", handleKeyDown, { capture: true });
     window.addEventListener("contextmenu", handleContextMenu, { capture: true });
     window.addEventListener("copy", handleCopy, { capture: true });
     window.addEventListener("cut", handleCut, { capture: true });
     window.addEventListener("paste", handlePaste, { capture: true });
+    window.addEventListener("dragstart", handleDragStart, { capture: true });
+    window.addEventListener("drop", handleDrop, { capture: true });
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown, { capture: true });
@@ -197,6 +228,8 @@ export function useSecurityLockdown({
       window.removeEventListener("copy", handleCopy, { capture: true });
       window.removeEventListener("cut", handleCut, { capture: true });
       window.removeEventListener("paste", handlePaste, { capture: true });
+      window.removeEventListener("dragstart", handleDragStart, { capture: true });
+      window.removeEventListener("drop", handleDrop, { capture: true });
     };
   }, [enabled, registerViolation]);
 
