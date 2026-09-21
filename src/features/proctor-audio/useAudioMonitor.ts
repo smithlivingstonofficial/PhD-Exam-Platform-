@@ -15,6 +15,7 @@ export function useAudioMonitor({
 }: UseAudioMonitorProps) {
   const [audioLevel, setAudioLevel] = useState<number>(0);
   const [isMicActive, setIsMicActive] = useState<boolean>(false);
+  const [stream, setStream] = useState<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -31,6 +32,7 @@ export function useAudioMonitor({
         }
 
         streamRef.current = stream;
+        setStream(stream);
         const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
         const audioCtx = new AudioCtx();
         audioContextRef.current = audioCtx;
@@ -76,7 +78,9 @@ export function useAudioMonitor({
       isMounted = false;
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
       }
+      setStream(null);
       if (audioContextRef.current && audioContextRef.current.state !== "closed") {
         audioContextRef.current.close().catch(() => {});
       }
@@ -86,5 +90,6 @@ export function useAudioMonitor({
   return {
     audioLevel,
     isMicActive,
+    stream,
   };
 }

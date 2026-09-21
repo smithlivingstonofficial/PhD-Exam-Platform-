@@ -1229,8 +1229,12 @@ export async function createExamSlotAction(data: {
       return { success: false, error: "Slot end time must be after the start time." };
     }
 
-    const count = await prisma.examSlot.count({ where: { examId: data.exam_id } });
-    const slotNumber = count + 1;
+    const highestSlot = await prisma.examSlot.findFirst({
+      where: { examId: data.exam_id },
+      orderBy: { slotNumber: "desc" },
+      select: { slotNumber: true },
+    });
+    const slotNumber = (highestSlot?.slotNumber ?? 0) + 1;
 
     const slot = await prisma.examSlot.create({
       data: {

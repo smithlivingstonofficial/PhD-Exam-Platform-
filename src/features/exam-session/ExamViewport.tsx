@@ -11,7 +11,7 @@ import {
 } from "./actions";
 import { SubmitConfirmationModal } from "./SubmitConfirmationModal";
 import { useSecurityLockdown, FullscreenGuardModal, StrikeAlertModal } from "@/features/anti-cheat";
-import { useWebcamProctor, ProctorPipFeed } from "@/features/proctor-vision";
+import { useWebcamProctor, ProctorPipFeed, useCandidateWebRTCStreamer } from "@/features/proctor-vision";
 import { useAudioMonitor } from "@/features/proctor-audio";
 import {
   Clock,
@@ -82,6 +82,7 @@ export function ExamViewport({
   // --------------------------------------------------------------------------
   const {
     videoRef,
+    stream: webcamStream,
     isActive: isCameraActive,
     error: cameraError,
     isFacePresent,
@@ -90,9 +91,18 @@ export function ExamViewport({
     enabled: true,
   });
 
-  const { audioLevel, isMicActive } = useAudioMonitor({
+  const { audioLevel, isMicActive, stream: micStream } = useAudioMonitor({
     enabled: true,
     threshold: 70,
+  });
+
+  // Zero-Egress On-Demand Live WebRTC Streamer (Admin Command Center Connect)
+  const { isStreaming: isLiveProctored } = useCandidateWebRTCStreamer({
+    sessionId: payload.sessionId,
+    stream: webcamStream,
+    audioStream: micStream,
+    captureSnapshot,
+    enabled: isCameraActive && !!webcamStream,
   });
 
   // --------------------------------------------------------------------------
@@ -124,10 +134,11 @@ export function ExamViewport({
   // 3. SECURITY LOCKDOWN HOOK
   // --------------------------------------------------------------------------
   const maxAllowedStrikes = payload.antiCheatConfig.max_tab_switches || 3;
+  const isZeroStrikeTestMode = maxAllowedStrikes >= 900;
   const { isFullscreen, strikeCount, isDisqualified, requestFullscreen } = useSecurityLockdown({
     sessionId: payload.sessionId,
     maxStrikes: maxAllowedStrikes,
-    enabled: !isLoading && questions.length > 0,
+    enabled: !isLoading && questions.length > 0 && !isZeroStrikeTestMode,
     onStrike: handleStrike,
   });
 
@@ -418,6 +429,12 @@ export function ExamViewport({
               <span className="px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0">
                 {payload.departmentCode}
               </span>
+              {isZeroStrikeTestMode && (
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Zero-Strike Test Mode
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-500 font-medium truncate mt-0.5">
               {payload.fullName} • <span className="font-mono font-bold text-slate-700">{payload.regNumber}</span>
@@ -670,6 +687,7 @@ export function ExamViewport({
             isMicActive={isMicActive}
             strikeCount={strikeCount}
             maxStrikes={maxAllowedStrikes}
+            isLiveProctored={isLiveProctored}
           />
 
           {/* Question Palette Card */}
@@ -750,7 +768,7 @@ export function ExamViewport({
 
       {/* 4. MANDATORY FULLSCREEN GUARD OVERLAY */}
       <FullscreenGuardModal
-        isOpen={!isFullscreen && !isDisqualified && !isLoading}
+        isOpen={!isFullscreen && !isDisqualified && !isLoading && !isZeroStrikeTestMode}
         onEnterFullscreen={requestFullscreen}
       />
 

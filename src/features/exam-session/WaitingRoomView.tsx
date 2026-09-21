@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { CandidateSessionPayload, startExamSessionAction } from "./actions";
+import { useCandidateWebRTCStreamer } from "@/features/proctor-vision";
 
 const headingFont = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -53,9 +54,17 @@ export function WaitingRoomView({
   const [isStarting, setIsStarting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [forceUnlockForDemo, setForceUnlockForDemo] = useState<boolean>(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // Live P2P WebRTC Streamer for Waiting Room Inspection
+  useCandidateWebRTCStreamer({
+    sessionId: payload.sessionId,
+    stream: cameraStream,
+    enabled: cameraActive && !!cameraStream,
+  });
 
   // 1-second clock ticker
   useEffect(() => {
@@ -65,12 +74,66 @@ export function WaitingRoomView({
     return () => clearInterval(timer);
   }, []);
 
+  const startCameraCheck = useCallback(async () => {
+    try {
+      setCameraError(null);
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      setCameraStream(stream);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      setCameraActive(true);
+    } catch (err) {
+      console.error("Camera error:", err);
+      setCameraError("Camera permission denied. Please click 'Allow' in your browser to turn on your camera.");
+      setCameraActive(false);
+      setCameraStream(null);
+    }
+  }, []);
+
+  // Auto-start camera verification on mount
+  useEffect(() => {
+    let mounted = true;
+    navigator.mediaDevices
+      ?.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 } }, audio: false })
+      .then(async (stream) => {
+        if (!mounted) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+        setCameraStream(stream);
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play().catch(() => {});
+        }
+        setCameraActive(true);
+      })
+      .catch((err) => {
+        console.warn("Auto camera init check catch:", err);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   // Cleanup camera stream on unmount
   useEffect(() => {
     return () => {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
       }
+      setCameraStream(null);
     };
   }, []);
 
@@ -101,29 +164,6 @@ export function WaitingRoomView({
     const mins = Math.floor(totalSecs / 60);
     const secs = totalSecs % 60;
     return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-  };
-
-  const startCameraCheck = async () => {
-    try {
-      setCameraError(null);
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
-      }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 } },
-        audio: false,
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-      setCameraActive(true);
-    } catch (err) {
-      console.error("Camera error:", err);
-      setCameraError("Camera permission denied. Please click 'Allow' in your browser to turn on your camera.");
-      setCameraActive(false);
-    }
   };
 
   const handleEnterHall = async () => {

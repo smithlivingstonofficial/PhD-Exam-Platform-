@@ -12,6 +12,7 @@ interface ProctorPipFeedProps {
   isMicActive: boolean;
   strikeCount: number;
   maxStrikes: number;
+  isLiveProctored?: boolean;
 }
 
 export function ProctorPipFeed({
@@ -23,6 +24,7 @@ export function ProctorPipFeed({
   isMicActive,
   strikeCount,
   maxStrikes,
+  isLiveProctored,
 }: ProctorPipFeedProps) {
   return (
     <div className="rounded-2xl bg-white border border-slate-200/90 shadow-sm p-3 space-y-2.5 select-none">
@@ -35,6 +37,11 @@ export function ProctorPipFeed({
           </span>
         </div>
         <div className="flex items-center gap-1.5">
+          {isLiveProctored && (
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 animate-pulse">
+              LIVE PROCTOR
+            </span>
+          )}
           <span
             className={`w-2 h-2 rounded-full ${
               isCameraActive ? "bg-emerald-500 animate-pulse" : "bg-rose-500"

@@ -15,6 +15,7 @@ export function useWebcamProctor({
   const [isActive, setIsActive] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isFacePresent, setIsFacePresent] = useState<boolean>(true);
+  const [stream, setStream] = useState<MediaStream | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -49,6 +50,7 @@ export function useWebcamProctor({
         }
 
         streamRef.current = stream;
+        setStream(stream);
 
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -64,6 +66,7 @@ export function useWebcamProctor({
         if (mounted) {
           setError("Webcam permissions not granted. Camera is required for AI invigilation.");
           setIsActive(false);
+          setStream(null);
         }
       }
     }
@@ -74,7 +77,9 @@ export function useWebcamProctor({
       mounted = false;
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
       }
+      setStream(null);
     };
   }, [enabled]);
 
@@ -153,6 +158,7 @@ export function useWebcamProctor({
 
   return {
     videoRef,
+    stream,
     isActive,
     error,
     isFacePresent,

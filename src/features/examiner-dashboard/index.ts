@@ -20,3 +20,7 @@ export { CandidateResponseSheetModal } from "./CandidateResponseSheetModal";
 export { ScoreOverrideModal } from "./ScoreOverrideModal";
 export { ManualAddSecondSlotModal } from "./ManualAddSecondSlotModal";
 export { CandidateIncidentModal } from "./CandidateIncidentModal";
+export { useAdminWebRTCReceiver } from "./useAdminWebRTCReceiver";
+export { LiveProctorCandidateCard } from "./LiveProctorCandidateCard";
+export { CandidateSpotlightModal } from "./CandidateSpotlightModal";
+export type { ActiveStreamContext } from "./CandidateSpotlightModal";
