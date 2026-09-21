@@ -1,10 +1,11 @@
 "use client";
 
-import { RefObject } from "react";
+import { RefObject, useEffect } from "react";
 import { Shield, Camera, Mic, AlertTriangle, UserCheck, UserX } from "lucide-react";
 
 interface ProctorPipFeedProps {
   videoRef: RefObject<HTMLVideoElement | null>;
+  stream?: MediaStream | null;
   isCameraActive: boolean;
   cameraError: string | null;
   isFacePresent: boolean;
@@ -17,6 +18,7 @@ interface ProctorPipFeedProps {
 
 export function ProctorPipFeed({
   videoRef,
+  stream,
   isCameraActive,
   cameraError,
   isFacePresent,
@@ -26,6 +28,22 @@ export function ProctorPipFeed({
   maxStrikes,
   isLiveProctored,
 }: ProctorPipFeedProps) {
+  // Ensure the live media stream is immediately bound to the video element when mounted
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (stream && video.srcObject !== stream) {
+      video.srcObject = stream;
+    }
+    video.muted = true;
+    video.playsInline = true;
+    if (isCameraActive && stream) {
+      video.play().catch((err) => {
+        console.warn("[Proctor PIP] Video auto-play interrupted:", err);
+      });
+    }
+  }, [videoRef, stream, isCameraActive]);
   return (
     <div className="rounded-2xl bg-white border border-slate-200/90 shadow-sm p-3 space-y-2.5 select-none">
       {/* Header */}

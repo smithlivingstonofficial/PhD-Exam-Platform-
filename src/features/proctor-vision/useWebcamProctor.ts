@@ -83,6 +83,20 @@ export function useWebcamProctor({
     };
   }, [enabled]);
 
+  // Reactive video attachment effect: handles cases where videoRef mounts after camera starts
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video && stream) {
+      if (video.srcObject !== stream) {
+        video.srcObject = stream;
+      }
+      video.muted = true;
+      video.play().catch((err) => {
+        console.warn("[Webcam Proctor] Reactive play catch:", err);
+      });
+    }
+  }, [stream, isActive]);
+
   // Client-side Face / Presence Check Loop
   useEffect(() => {
     if (!enabled || !isActive) return;
@@ -96,6 +110,15 @@ export function useWebcamProctor({
 
     const interval = setInterval(() => {
       const video = videoRef.current;
+      const currentStream = streamRef.current;
+
+      // Self-healing video binding: if video was mounted after loading state resolved
+      if (video && currentStream && video.srcObject !== currentStream) {
+        video.srcObject = currentStream;
+        video.muted = true;
+        video.play().catch(() => {});
+      }
+
       const canvas = canvasRef.current;
       if (!video || !canvas || video.readyState < 2) return;
 

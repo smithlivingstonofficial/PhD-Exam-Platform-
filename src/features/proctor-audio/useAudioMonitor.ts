@@ -37,6 +37,18 @@ export function useAudioMonitor({
         const audioCtx = new AudioCtx();
         audioContextRef.current = audioCtx;
 
+        if (audioCtx.state === "suspended") {
+          audioCtx.resume().catch(() => {});
+        }
+
+        const handleResume = () => {
+          if (audioContextRef.current && audioContextRef.current.state === "suspended") {
+            audioContextRef.current.resume().catch(() => {});
+          }
+        };
+        window.addEventListener("click", handleResume, { once: true });
+        window.addEventListener("keydown", handleResume, { once: true });
+
         const source = audioCtx.createMediaStreamSource(stream);
         const analyser = audioCtx.createAnalyser();
         analyser.fftSize = 256;
@@ -47,6 +59,11 @@ export function useAudioMonitor({
 
         const checkAudio = () => {
           if (!isMounted || !audioContextRef.current) return;
+
+          if (audioContextRef.current.state === "suspended") {
+            audioContextRef.current.resume().catch(() => {});
+          }
+
           analyser.getByteFrequencyData(dataArray);
 
           let sum = 0;

@@ -74,7 +74,13 @@ export function CandidateSpotlightModal({
   // Seamlessly bind and play active media stream on the video element
   useEffect(() => {
     const videoEl = videoRef.current;
-    if (!videoEl || !activeStream) return;
+    if (!videoEl) return;
+
+    if (!streamContext) {
+      internalReceiver.setVideoRef(videoEl);
+    }
+
+    if (!activeStream) return;
 
     try {
       if (videoEl.srcObject !== activeStream) {
@@ -82,13 +88,14 @@ export function CandidateSpotlightModal({
       }
       videoEl.defaultMuted = true;
       videoEl.muted = activeIsMuted;
+      videoEl.playsInline = true;
       videoEl.play().catch((err) => {
         console.warn("[Spotlight Modal] Video auto-play interrupted:", err);
       });
     } catch (err) {
       console.warn("[Spotlight Modal] Error attaching stream to video:", err);
     }
-  }, [activeStream, activeIsMuted, activeConnectionState]);
+  }, [activeStream, activeIsMuted, activeConnectionState, streamContext, internalReceiver]);
 
   if (!isOpen) return null;
 

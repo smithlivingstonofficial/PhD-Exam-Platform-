@@ -680,6 +680,7 @@ export function ExamViewport({
           {/* Live AI Proctor PIP Card */}
           <ProctorPipFeed
             videoRef={videoRef}
+            stream={webcamStream}
             isCameraActive={isCameraActive}
             cameraError={cameraError}
             isFacePresent={isFacePresent}

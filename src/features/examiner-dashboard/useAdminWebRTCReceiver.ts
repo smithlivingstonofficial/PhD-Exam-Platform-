@@ -104,6 +104,11 @@ export function useAdminWebRTCReceiver({
       const audioCtx = new AudioCtx();
       audioContextRef.current = audioCtx;
 
+      // Ensure AudioContext is resumed in modern browsers
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume().catch(() => {});
+      }
+
       const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 256;
@@ -254,31 +259,34 @@ export function useAdminWebRTCReceiver({
 
         // 2. Handle Incoming Remote Tracks
         pc.ontrack = (event) => {
-          let stream = event.streams && event.streams[0] ? event.streams[0] : null;
-
-          if (!stream) {
-            if (inboundStreamRef.current) {
-              inboundStreamRef.current.addTrack(event.track);
-              stream = inboundStreamRef.current;
-            }
+          if (!inboundStreamRef.current) {
+            inboundStreamRef.current = new MediaStream();
           }
 
-          if (stream) {
-            setRemoteStream(stream);
-            setConnectionState("LIVE");
+          // Ensure track is tracked in our persistent inbound stream
+          const currentTracks = inboundStreamRef.current.getTracks();
+          if (!currentTracks.some((t) => t.id === event.track.id)) {
+            inboundStreamRef.current.addTrack(event.track);
+          }
 
-            if (videoElementRef.current) {
-              videoElementRef.current.srcObject = stream;
-              videoElementRef.current.defaultMuted = true;
-              videoElementRef.current.muted = isMuted;
-              videoElementRef.current.play().catch((err) => {
-                console.warn("[WebRTC Admin] Video play catch:", err);
-              });
-            }
+          // Generate a fresh stream object instance so React triggers state re-renders
+          const activeTracks = inboundStreamRef.current.getTracks();
+          const freshStream = new MediaStream(activeTracks);
 
-            if (event.track.kind === "audio") {
-              setupAudioAnalyzer(stream);
-            }
+          setRemoteStream(freshStream);
+          setConnectionState("LIVE");
+
+          if (videoElementRef.current) {
+            videoElementRef.current.srcObject = freshStream;
+            videoElementRef.current.defaultMuted = true;
+            videoElementRef.current.muted = isMuted;
+            videoElementRef.current.play().catch((err) => {
+              console.warn("[WebRTC Admin] Video play catch:", err);
+            });
+          }
+
+          if (event.track.kind === "audio") {
+            setupAudioAnalyzer(freshStream);
           }
         };
 
