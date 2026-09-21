@@ -37,8 +37,9 @@ export function useWebcamProctor({
 
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
-            width: { ideal: 480 },
-            height: { ideal: 360 },
+            width: { ideal: 1280, min: 640 },
+            height: { ideal: 720, min: 480 },
+            frameRate: { ideal: 24, max: 30 },
             facingMode: "user",
           },
           audio: false,

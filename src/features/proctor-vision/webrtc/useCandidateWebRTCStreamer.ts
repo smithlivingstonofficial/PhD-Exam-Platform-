@@ -193,7 +193,7 @@ export function useCandidateWebRTCStreamer({
             if (!params.encodings || params.encodings.length === 0) {
               params.encodings = [{}];
             }
-            params.encodings[0].maxBitrate = 250000; // 250 kbps
+            params.encodings[0].maxBitrate = 800000; // 800 kbps for crisp 720p HD live video
             sender.setParameters(params).catch(() => {});
           }
         });

@@ -318,7 +318,7 @@ export function CandidateSpotlightModal({
                   Bandwidth Cap
                 </span>
                 <span className="text-xs font-mono font-bold text-amber-400 mt-0.5 block">
-                  250 kbps (Native WebRTC)
+                  800 kbps (720p HD P2P)
                 </span>
               </div>
             </div>
